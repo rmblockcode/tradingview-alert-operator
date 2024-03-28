@@ -37,6 +37,7 @@ class TradingviewAlertSignal(Base):
     status_id = Column(Integer, ForeignKey('access_management_status.id'), nullable=False)
 
     user_access = relationship("UserAccess", backref="tradingview_alerts")
+    alert_taken = Column(Boolean, default=False)
     status = relationship("Status")
 
 class Status(Base):

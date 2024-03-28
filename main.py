@@ -39,13 +39,17 @@ async def health_checker():
 @app.get("/tradingview-alert/signal/{user_code}/")
 async def get_tradingview_alert(user_code: str, db: Session = Depends(get_db)):
     alert = db.query(TradingviewAlertSignal).filter(
-        TradingviewAlertSignal.user_access.has(user_code=user_code)
+        TradingviewAlertSignal.user_access.has(user_code=user_code),
+        TradingviewAlertSignal.alert_taken == False
     ).first()
     
     if not alert:
-        raise HTTPException(status_code=404, detail="Código de usuario no es válido o no existe alerta")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=False)
     
+    alert.alert_taken = True
+    db.commit()
     return {
+        'detail': True,
         'signal_type': alert.signal_type,
         'sl_points': alert.sl_points
     }
@@ -84,6 +88,7 @@ async def create_tradingview_alert(alert_data: TradingviewAlertRequest, db: Sess
 
     alert.signal_type = signal_type
     alert.sl_points = sl_points
+    alert.alert_taken = False
     db.commit()
 
     return {'message': 'Datos almacenados exitosamente'}
