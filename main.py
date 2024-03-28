@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import Optional
 from enum import Enum
 from sqlalchemy.orm import Session
 from models import TradingviewAlertSignal, Status
@@ -23,7 +24,12 @@ class SignalType(str, Enum):
 class TradingviewAlertRequest(BaseModel):
     user_code: str
     signal_type: str
-    sl_points: int
+    symbol: str
+    account_number: int
+    sl_pips: Optional[float]
+    sl_price: Optional[float]
+    tp_pips: Optional[float]
+    tp_price: Optional[float]
 
 
 class Signal(BaseModel):
@@ -59,14 +65,34 @@ async def get_tradingview_alert(user_code: str, db: Session = Depends(get_db)):
 async def create_tradingview_alert(alert_data: TradingviewAlertRequest, db: Session = Depends(get_db)):
     user_code = alert_data.user_code
     signal_type = alert_data.signal_type
-    sl_points = alert_data.sl_points
+    symbol = alert_data.symbol
+    account_number = alert_data.account_number
+    sl_pips = alert_data.sl_pips
+    sl_price = alert_data.sl_price
+    tp_pips = alert_data.sl_pips
+    tp_price = alert_data.sl_price
 
-    if not all([user_code, signal_type, sl_points]):
+    # First validate either sl_pips or sl_price is passed
+    if (not sl_pips and not sl_price):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Parámetros faltantes'
+            detail='Debe proveer un Stop Loss ya sea en pips o en precio'
         )
-
+    
+    # Validate that sl_pips, sl_price, tp_pips and tp_price are number
+    # and not negative
+    for field in [sl_pips, sl_price, tp_pips, tp_price]:
+        if field:
+            try:
+                value = float(field)
+                if value < 0:
+                    raise ValueError('No se permiten valores negativos')
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"{str(e)} no es un número válido"
+                )
+    
     # Validate user_code exists
     active_status = db.query(Status).filter_by(status='active').first()
     if not active_status:
@@ -87,7 +113,7 @@ async def create_tradingview_alert(alert_data: TradingviewAlertRequest, db: Sess
         )
 
     alert.signal_type = signal_type
-    alert.sl_points = sl_points
+    alert.sl_pips = sl_pips
     alert.alert_taken = False
     db.commit()
 
