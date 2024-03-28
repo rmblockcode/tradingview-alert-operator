@@ -20,7 +20,10 @@ int OnInit()
 //---
    
 //---
-   getSignal();
+   //getSignal();
+   double currentPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+   double slPrice = CalculateSLPrice(currentPrice, 35, true);
+   Print("Symbol: ", _Symbol);
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
@@ -37,10 +40,33 @@ void OnDeinit(const int reason)
 void OnTick()
   {
 //---
-   getSignal();
+   //getSignal();
    return;
   }
 //+------------------------------------------------------------------+
+
+
+double CalculateSLPrice(double currentPrice, int slPips, bool isBuyOrder) {
+   double pointSize = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+   int digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
+  
+   Print("digits: ", digits);
+   Print("currentPrice: ", currentPrice);
+   Print("pointSize: ", pointSize);
+   
+   if (isBuyOrder) {
+     // Para órdenes de compra, el SL está por debajo del precio actual
+     double stopLossPrice = NormalizeDouble(currentPrice - slPips * pointSize, digits);
+     Print("stopLossPrice compra: ", stopLossPrice);
+     return stopLossPrice;
+   } else {
+     // Para órdenes de venta, el SL está por encima del precio actual
+     double stopLossPrice = NormalizeDouble(currentPrice + slPips * pointSize, digits);
+     Print("stopLossPrice venta: ", stopLossPrice);
+     return stopLossPrice;
+   }
+}
+
 
 void getSignal()
   {
