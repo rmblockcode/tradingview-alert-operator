@@ -41,7 +41,7 @@ class UserAccessAccount(Base):
     __tablename__ = 'access_management_useraccessaccount'
 
     user_access_account = Column(Integer, primary_key=True)
-    account_number = Column(Integer)
+    account_number = Column(String)
     user_access_id = Column(Integer, ForeignKey('access_management_useraccess.user_access_id'))
     user_access = relationship("UserAccess")
     status_id = Column(Integer, ForeignKey('access_management_status.id'), nullable=True, default=None)
