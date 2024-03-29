@@ -69,7 +69,8 @@ async def get_tradingview_alert(user_code: str, account_number:int, db: Session 
         'sl_price': alert.sl_price,
         'tp_pips': alert.tp_pips,
         'tp_price': alert.tp_price,
-        'symbol': alert.symbol
+        'symbol': alert.symbol,
+        'amount_to_risk': alert.amount_to_risk
     }
 
 
