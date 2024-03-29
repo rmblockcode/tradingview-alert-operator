@@ -7,19 +7,12 @@ from database import Base
 
 
 class Status(Base):
-    __tablename__ = 'status'
+    __tablename__ = "access_management_status"
 
-    STATUS_CHOICES = [
-        ('active', 'Activo'),
-        ('in_review', 'En Revisión'),
-        ('deactivated', 'Desactivado'),
-        ('rejected', 'Rechazado'),
-        ('cancelled', 'Cancelado'),
-    ]
+    id = Column(Integer, primary_key=True)
+    status = Column(String(15), nullable=False, unique=True)
 
-    status = Column(String(15), primary_key=True)
-
-    def __repr__(self):
+    def __str__(self):
         return self.status
 
 
@@ -32,8 +25,11 @@ class UserAccess(Base):
     user_email = Column(String(100), unique=True, nullable=True)
     discord_username = Column(String(30), unique=True, nullable=True)
     max_accounts_available = Column(Integer, default=1)
-    status_id = Column(Integer, ForeignKey('status.status_id'), nullable=True, default=None)
+    status_id = Column(Integer, ForeignKey('access_management_status.id'), nullable=True, default=None)
     status = relationship('Status')
+    xauusd_bot_ny_enabled = Column(Boolean, default=False)
+    xauusd_bot_london_enabled = Column(Boolean, default=False)
+    tradingview_alert_bot_enabled = Column(Boolean, default=False)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
@@ -42,13 +38,13 @@ class UserAccess(Base):
 
 
 class UserAccessAccount(Base):
-    __tablename__ = 'user_access_account'
+    __tablename__ = 'access_management_useraccessaccount'
 
     user_access_account = Column(Integer, primary_key=True)
     account_number = Column(Integer)
-    user_access_id = Column(Integer, ForeignKey('user_access.user_access_id'))
+    user_access_id = Column(Integer, ForeignKey('access_management_useraccess.user_access_id'))
     user_access = relationship("UserAccess")
-    status_id = Column(Integer, ForeignKey('status.status_id'), nullable=True, default=None)
+    status_id = Column(Integer, ForeignKey('access_management_status.id'), nullable=True, default=None)
     status = relationship("Status")
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
@@ -61,7 +57,7 @@ class TradingviewAlertSignal(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
     user_access_id = Column(Integer, ForeignKey('access_management_useraccess.user_access_id'), nullable=False)
-    trx_id = Column(String, unique=True)
+    user_access = relationship("UserAccess", backref="tradingview_alerts")
     signal_type = Column(String(4), nullable=True)
     symbol = Column(String(20))
     account_number = Column(Integer)
@@ -69,17 +65,6 @@ class TradingviewAlertSignal(Base):
     sl_price = Column(Float, nullable=True)
     tp_pips = Column(Float, nullable=True)
     tp_price = Column(Float, nullable=True)
-    status_id = Column(Integer, ForeignKey('access_management_status.id'), nullable=False)
-
-    user_access = relationship("UserAccess", backref="tradingview_alerts")
+    amount_to_risk = Column(Float)
     alert_taken = Column(Boolean, default=False)
-    status = relationship("Status")
 
-class Status(Base):
-    __tablename__ = "access_management_status"
-
-    id = Column(Integer, primary_key=True)
-    status = Column(String(15), nullable=False, unique=True)
-
-    def __str__(self):
-        return self.status
