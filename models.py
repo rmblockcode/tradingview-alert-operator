@@ -68,3 +68,17 @@ class TradingviewAlertSignal(Base):
     amount_to_risk = Column(Float)
     alert_taken = Column(Boolean, default=False)
 
+
+class TradingviewAlertGoldLondonSignal(Base):
+    __tablename__ = 'tradingview_alert_tradingviewalertgoldlondonsignal'
+
+    id = Column(Integer, primary_key=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
+    signal_type = Column(String(4))
+    sl_price = Column(Float)
+    tp_price = Column(Float)
+    be_price = Column(Float)
+    close_trade = Column(Boolean, default=False)
+    open_timestamp = Column(DateTime)
+    close_timestamp = Column(DateTime, nullable=True)
