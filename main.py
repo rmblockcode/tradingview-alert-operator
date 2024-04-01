@@ -203,13 +203,13 @@ async def create_tradingview_alert_gold_london(
         prices = prices.split('-')
         tp_price = prices[0]
         sl_price = prices[1]
-        be_price = prices[2]
+        price_for_be = prices[2]
 
         new_signal = TradingviewAlertGoldLondonSignal(
             signal_type=signal_type,
             sl_price=sl_price,
             tp_price=tp_price,
-            be_price=be_price,
+            price_for_be=price_for_be,
             open_timestamp=timestamp,
             close_timestamp=None,
             created_at=func.now(),
@@ -271,7 +271,7 @@ async def get_tradingview_alert(user_code: str, account_number:str, db: Session 
             'signal_type': today_signal.signal_type,
             'sl_price': today_signal.sl_price,
             'tp_price': today_signal.tp_price,
-            'be_price': today_signal.be_price,
+            'price_for_be': today_signal.price_for_be,
             'close_trade': today_signal.close_trade,
         }
     else:
