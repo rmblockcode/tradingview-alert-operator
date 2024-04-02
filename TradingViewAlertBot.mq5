@@ -10,7 +10,6 @@
 #include <Trade\JAson.mqh>
 CTrade trade;
 
-input string signalUrl = "https://tradingview-alert-operator.onrender.com"; // No editar al menos que sea indicado
 input string userCode = "joedoe"; // Código de usuario (Solicitar)
 //input string telegramChatID = "-1111111111111"; // Ingresa tu Telegram Chat ID
 //input string telegramBotToken = "700000000:AAFabuLwS7y5L6E7vz6_LGCHA7SP87GaXYZ"; // Ingresa tu Telegram API Token
@@ -21,6 +20,9 @@ input string telegramBotToken = "7012376231:AAFabuLwS7y5L6E7vz6_LGCHA7SP87GaVaM"
 
 // User Access
 input string botUrl = "https://tradingbot-access.onrender.com"; // No editar al menos que sea indicado
+
+input string signalUrl = "https://tradingview-alert-operator.onrender.com"; // No editar al menos que sea indicado
+
 input int timeout = 5000; // Timeout
 
 bool userAccessValidated = false; // Flag para indicar si el bot esta habilitado para el usuario y la cuenta
@@ -89,75 +91,74 @@ void getSignal()
    int timeout=2000;
    bool b;
 
+   long accountNumber = AccountInfoInteger(ACCOUNT_LOGIN);
+   Print("accountNumber: ", IntegerToString(accountNumber));
+   requestURL = StringFormat("%s/tradingview-alert/signal/%s/%s/", signalUrl, userCode, IntegerToString(accountNumber));
+   int response = WebRequest("GET", requestURL, headers, timeout, posData, resultData, requestHeaders);
 
-   if (isOpenPositionInDay == false) {
-      long accountNumber = AccountInfoInteger(ACCOUNT_LOGIN);
-      Print("accountNumber: ", IntegerToString(accountNumber));
-      requestURL = StringFormat("%s/tradingview-alert/signal/%s/%s/", signalUrl, userCode, IntegerToString(accountNumber));
-      int response = WebRequest("GET", requestURL, headers, timeout, posData, resultData, requestHeaders);
+   string resultMessage = CharArrayToString(resultData);
+   CJAVal js (NULL, jtUNDEF);
+   b = js.Deserialize(resultMessage);
+   bool openTrade = js["detail"].ToBool();
+   string signal_type = js["signal_type"].ToStr();
+   string symbol = js["symbol"].ToStr();
+   double amount_to_risk = js["amount_to_risk"].ToDbl();
+   double sl_pips = js["sl_pips"].ToDbl();
+   double sl_price = js["sl_price"].ToDbl();
+   double tp_pips = js["tp_pips"].ToDbl();
+   double tp_price = js["tp_price"].ToDbl();
    
-      string resultMessage = CharArrayToString(resultData);
-      CJAVal js (NULL, jtUNDEF);
-      b = js.Deserialize(resultMessage);
-      bool detail = js["detail"].ToBool();
+   if (openTrade == true) { // Se abre operacion
       string signal_type = js["signal_type"].ToStr();
-      string symbol = js["symbol"].ToStr();
-      double amount_to_risk = js["amount_to_risk"].ToDbl();
-      double sl_pips = js["sl_pips"].ToDbl();
-      double sl_price = js["sl_price"].ToDbl();
-      double tp_pips = js["tp_pips"].ToDbl();
-      double tp_price = js["tp_price"].ToDbl();
-            
-      bool openTrade = js["detail"].ToBool();
       
-      if (openTrade == true) { // Se abre operacion
-         string signal_type = js["signal_type"].ToStr();
+      if (signal_type == "buy"){
+         Print("ABRO COMPRA");
+         double currentPrice = SymbolInfoDouble(symbol, SYMBOL_ASK);
          
-         if (signal_type == "buy"){
-            Print("ABRO COMPRA");
-            double currentPrice = SymbolInfoDouble(symbol, SYMBOL_ASK);
-            
-            // First set StopLoss Price
-            double lotSize = CalculateLotSize(symbol, amount_to_risk, sl_pips, sl_price);
-            double stopLossPrice = CalculateSLPrice(symbol, currentPrice, sl_pips, sl_price, true);
-            double takeProfitPrice = CalculateTPPrice(symbol, currentPrice, tp_pips, tp_price, true);
+         // First set StopLoss Price
+         double lotSize = CalculateLotSize(symbol, amount_to_risk, sl_pips, sl_price);
+         double stopLossPrice = CalculateSLPrice(symbol, currentPrice, sl_pips, sl_price, true);
+         double takeProfitPrice = CalculateTPPrice(symbol, currentPrice, tp_pips, tp_price, true);
 
-            trade.Buy(lotSize, symbol, currentPrice, stopLossPrice, takeProfitPrice, "[BUY OPENED] TradingView Alert Bot");
-            tradeTicket = trade.ResultOrder();
-            
-            string telegramMessage = StringFormat(
-                                 "[COMPRA ACTIVADA] Precio Apertura: %s ; Precio de TP: %s; Precio SL: %s",
-                                 DoubleToString(currentPrice),
-                                 DoubleToString(takeProfitPrice),
-                                 DoubleToString(stopLossPrice));
+         trade.Buy(lotSize, symbol, currentPrice, stopLossPrice, takeProfitPrice, "[BUY OPENED] TradingView Alert Bot");
+         tradeTicket = trade.ResultOrder();
+         
+         double openPriceReal = PositionGetDouble(POSITION_PRICE_OPEN);
+         
+         string telegramMessage = StringFormat(
+                              "[COMPRA ACTIVADA] Precio Apertura: %s ; Precio de TP: %s; Precio SL: %s",
+                              DoubleToString(openPriceReal),
+                              DoubleToString(takeProfitPrice),
+                              DoubleToString(stopLossPrice));
 
-            Print(telegramMessage);
+         Print(telegramMessage);
 
-            sendTelegramMessage(telegramMessage, telegramChatID, telegramBotToken);
+         sendTelegramMessage(telegramMessage, telegramChatID, telegramBotToken);
 
-         } else if (signal_type == "sell"){
-            Print("ABRO VENTA");
-            double currentPrice = SymbolInfoDouble(symbol, SYMBOL_BID);
-            double lotSize = CalculateLotSize(symbol, amount_to_risk, sl_pips, sl_price);
+      } else if (signal_type == "sell"){
+         Print("ABRO VENTA");
+         double currentPrice = SymbolInfoDouble(symbol, SYMBOL_BID);
+         double lotSize = CalculateLotSize(symbol, amount_to_risk, sl_pips, sl_price);
 
-            double stopLossPrice = CalculateSLPrice(symbol, currentPrice, sl_pips, sl_price, false);
-            double takeProfitPrice = CalculateTPPrice(symbol, currentPrice, tp_pips, tp_price, false);
+         double stopLossPrice = CalculateSLPrice(symbol, currentPrice, sl_pips, sl_price, false);
+         double takeProfitPrice = CalculateTPPrice(symbol, currentPrice, tp_pips, tp_price, false);
 
-            trade.Sell(lotSize, symbol, currentPrice, stopLossPrice, takeProfitPrice, "[SELL OPENED] TradingView Alert Bot");
-            tradeTicket = trade.ResultOrder();
-            
-            string telegramMessage = StringFormat(
-                                 "[VENTA ACTIVADA] Precio Apertura: %s ; Precio de TP: %s; Precio SL: %s",
-                                 DoubleToString(currentPrice),
-                                 DoubleToString(takeProfitPrice),
-                                 DoubleToString(stopLossPrice));
+         trade.Sell(lotSize, symbol, currentPrice, stopLossPrice, takeProfitPrice, "[SELL OPENED] TradingView Alert Bot");
+         tradeTicket = trade.ResultOrder();
+         
+         double openPriceReal = PositionGetDouble(POSITION_PRICE_OPEN);
+         
+         string telegramMessage = StringFormat(
+                              "[VENTA ACTIVADA] Precio Apertura: %s ; Precio de TP: %s; Precio SL: %s",
+                              DoubleToString(openPriceReal),
+                              DoubleToString(takeProfitPrice),
+                              DoubleToString(stopLossPrice));
 
-            Print(telegramMessage);
+         Print(telegramMessage);
 
-            sendTelegramMessage(telegramMessage, telegramChatID, telegramBotToken);
-         }
-         isOpenPositionInDay = true;
+         sendTelegramMessage(telegramMessage, telegramChatID, telegramBotToken);
       }
+      isOpenPositionInDay = true;
    }
 
    return;
@@ -196,12 +197,6 @@ bool botAccessRequest(string remainUrl)
 //+------------------------------------------------------------------+
 bool botAccessValidation(string accountNumber)
   {
-   string headers = "";
-   string requestURL = "";
-   string requestHeaders = "";
-   char resultData[];
-   char posData[];
-
    string remainUrl = StringFormat("access-validation/%s/%s/tradingview_alert_bot_enabled/", userCode, IntegerToString(accountNumber));
 
    bool response = botAccessRequest(remainUrl);

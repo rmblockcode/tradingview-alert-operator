@@ -31,7 +31,8 @@ int timeout = 5000; // Timeout
 bool userAccessValidated = false; // Flag para indicar si el bot esta habilitado para el usuario y la cuenta
 
 bool isOpenPositionInDay = false;
-ulong tradeTicket = 0;
+ulong tradeTicketBuy = 0;
+ulong tradeTicketSell = 0;
 
 double priceForBE = 0;
 bool alreadyInBreakEvenBuy = false; // Flag para indicar que ya se modifico a BreakEven para compras
@@ -98,7 +99,7 @@ void getSignal()
    int timeout=2000;
    bool b;
 
-   if(tradeTicketBuy <= 0 && tradeTicketSell <= 0 && isOpenPositionInDay == false)){
+   if(tradeTicketBuy <= 0 && tradeTicketSell <= 0 && isOpenPositionInDay == false){
       long accountNumber = AccountInfoInteger(ACCOUNT_LOGIN);
       Print("accountNumber: ", IntegerToString(accountNumber));
       requestURL = StringFormat("%s/tradingview-alert-gold-london/signal/%s/%s/", signalUrl, userCode, IntegerToString(accountNumber));
@@ -123,32 +124,48 @@ void getSignal()
             // First set StopLoss Price
             double lotSize = CalculateLotSize(_Symbol, amountToRisk, slPrice);
    
-            trade.Buy(lotSize, symbol, currentPrice, slPrice, tpPrice, "[BUY OPENED] TradingView Alert Bot");
-            tradeTicket = trade.ResultOrder();
+            trade.Buy(lotSize, _Symbol, currentPrice, slPrice, tpPrice, "[BUY OPENED] TradingView Alert Bot");
+            tradeTicketBuy = trade.ResultOrder();
+            
+            double slReal = PositionGetDouble(POSITION_SL);
+            double tpReal = PositionGetDouble(POSITION_TP);
+            double openPriceReal = PositionGetDouble(POSITION_PRICE_OPEN);
             
             string telegramMessage = StringFormat(
-                                 "[COMPRA ACTIVADA] Precio Apertura: %s ; Precio de TP: %s; Precio SL: %s",
+                                 "[COMPRA ACTIVADA] Precios teóricos => Precio Apertura: %s ; Precio de TP: %s; Precio SL: %s | Precios Reales => Precio Apertura: %s ; Precio de TP: %s; Precio SL: %s",
                                  DoubleToString(currentPrice),
-                                 DoubleToString(takeProfitPrice),
-                                 DoubleToString(stopLossPrice));
+                                 DoubleToString(slPrice),
+                                 DoubleToString(tpPrice),
+                                 DoubleToString(openPriceReal),
+                                 DoubleToString(tpReal),
+                                 DoubleToString(slReal));
    
             Print(telegramMessage);
    
             sendTelegramMessage(telegramMessage, telegramChatID, telegramBotToken);
+            
+            
    
          } else if (signal_type == "sell"){
             Print("ABRO VENTA");
-            double currentPrice = SymbolInfoDouble(symbol, SYMBOL_BID);
-            double lotSize = NormalizeDouble(amountToRisk / stopLossPips, decimalDigits);
+            double currentPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+            double lotSize = CalculateLotSize(_Symbol, amountToRisk, slPrice);
    
-            trade.Sell(lotSize, symbol, currentPrice, stopLossPrice, takeProfitPrice, "[SELL OPENED] TradingView Alert Bot");
-            tradeTicket = trade.ResultOrder();
+            trade.Sell(lotSize, _Symbol, currentPrice, slPrice, tpPrice, "[SELL OPENED] TradingView Alert Bot");
+            tradeTicketSell = trade.ResultOrder();
+            
+            double slReal = PositionGetDouble(POSITION_SL);
+            double tpReal = PositionGetDouble(POSITION_TP);
+            double openPriceReal = PositionGetDouble(POSITION_PRICE_OPEN);
             
             string telegramMessage = StringFormat(
-                                 "[VENTA ACTIVADA] Precio Apertura: %s ; Precio de TP: %s; Precio SL: %s",
+                                 "[VENTA ACTIVADA] Precios teóricos => Precio Apertura: %s ; Precio de TP: %s; Precio SL: %s | Precios Reales => Precio Apertura: %s ; Precio de TP: %s; Precio SL: %s",
                                  DoubleToString(currentPrice),
-                                 DoubleToString(takeProfitPrice),
-                                 DoubleToString(stopLossPrice));
+                                 DoubleToString(tpPrice),
+                                 DoubleToString(slPrice),
+                                 DoubleToString(openPriceReal),
+                                 DoubleToString(tpReal),
+                                 DoubleToString(slReal));
    
             Print(telegramMessage);
    

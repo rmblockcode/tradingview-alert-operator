@@ -237,13 +237,15 @@ async def create_tradingview_alert_gold_london(
 async def get_tradingview_alert(user_code: str, account_number:str, db: Session = Depends(get_db)):
 
     # Validate user exists and is active
-    user_validation = db.query(UserAccessAccount).filter(
-        UserAccessAccount.user_access.has(user_code=user_code),
-        UserAccessAccount.user_access.has(Status.status == 'active'),
-        UserAccessAccount.user_access.has(xauusd_bot_london_enabled=True),
-        UserAccessAccount.account_number == account_number,
-        UserAccessAccount.status.has(status='active')
-    ).first()
+    user_validation = db.query(UserAccessAccount).\
+        join(UserAccess).\
+        join(Status).\
+        filter(UserAccess.user_code == user_code).\
+        filter(Status.status == 'active').\
+        filter(UserAccess.xauusd_bot_london_enabled == True).\
+        filter(UserAccessAccount.account_number == account_number).\
+        filter(UserAccessAccount.status_id == Status.id).\
+        first()
     
     if not user_validation:
         raise HTTPException(
@@ -259,11 +261,11 @@ async def get_tradingview_alert(user_code: str, account_number:str, db: Session 
 
     if today_signal:
         limit_time = today_signal.open_timestamp + timedelta(minutes=delay_minutes)
-        print(limit_time)
-        if today_signal.open_timestamp  > limit_time and not today_signal.close_trade:
+        limit_time = limit_time.replace(tzinfo=None)
+        if datetime.now()  > limit_time and not today_signal.close_trade:
             print(
             f'Ya han pasado {delay_minutes} minutes '
-            'después de la señal')
+            f'después de la señal. Cliente: {user_code}')
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=False)
 
         return {

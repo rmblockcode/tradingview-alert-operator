@@ -1,0 +1,168 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using cAlgo.API;
+using cAlgo.API.Collections;
+using cAlgo.API.Indicators;
+using cAlgo.API.Internals;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+
+namespace cAlgo.Robots
+{
+    [Robot(AccessRights = AccessRights.None)]
+    public class XAUUSD_StrategyLondonCtrader : Robot
+    {
+
+        [Parameter(DefaultValue = "Codigo de Usuario")]
+        public string UserCode { get; set; }
+
+        [Parameter(DefaultValue = "Telegram Chat ID")]
+        public string TelegramChatID { get; set; }
+
+        [Parameter(DefaultValue = "Telegram API Token")]
+        public string TelegramBotToken { get; set; }
+
+        [Parameter(DefaultValue = "Monto a Arriesgar para operaciones en Compra")]
+        public double amountToRiskBuy { get; set; }
+
+        [Parameter(DefaultValue = "Monto a Arriesgar para operaciones en Venta")]
+        public string amountToRiskSell { get; set; }
+
+        [Parameter(DefaultValue = "https://tradingbot-access.onrender.com")]
+        public string BotAccessUrl { get; set; }
+
+        [Parameter(DefaultValue = "https://tradingview-alert-operator.onrender.com")]
+        public string SignalUrl { get; set; }
+
+        protected override void OnStart()
+        {
+            // Tu código de inicialización aquí
+            Print($"Account number: {Account.Number}");
+            //SendTelegramMessage("INICIANDO TRADINGVIEW ALERT BOT EN CTRADER...");
+
+            bool botAccessValidation = BotAccessValidation(Account.Number.ToString());
+
+            if (!botAccessValidation)
+            {
+                SendTelegramMessage("Bot NO habilitado para esta cuenta");
+                Stop();
+            }
+
+            //SendTelegramMessage("¡INICIO DE BOT SATISFACTORIO!");
+            GetSignal();
+        }
+
+        protected override void OnTick()
+        {
+            // Handle price updates here
+            //GetSignal();
+        }
+
+        protected override void OnStop()
+        {
+            // Handle cBot stop here
+            //SendTelegramMessage($"Bot apagado en la cuenta {Account.Number.ToString()} en CTrader!");
+        }
+
+        private void GetSignal()
+        {
+            int accountNumber = Account.Number;
+
+            string url = $"{SignalUrl}/tradingview-alert-gold-london/signal/{UserCode}/{accountNumber.ToString()}/";
+
+            var response = Http.Get(url);
+
+            if (response.IsSuccessful)
+            {
+                var resultJson = JsonSerializer.Deserialize<SignalResponse>(response.Body);
+                Print($"detail: {resultJson.detail}");
+                Print($"signal_type: {resultJson.signal_type}");
+                Print($"sl_price: {resultJson.sl_price}");
+                Print($"tp_price: {resultJson.tp_price}");
+                Print($"price_for_be: {resultJson.price_for_be}");
+                Print($"close_trade: {resultJson.close_trade}");
+                double slPrice = resultJson.sl_price;
+                double tpPrice = resultJson.tp_price;
+
+                // Obtiene el precio de entrada actual como el precio Ask para una operación de compra
+                double entryPrice = Symbols.GetSymbol(SymbolName).Ask;
+
+                // Obtiene el valor de un pip para una onza de oro (XAUUSD) en la cuenta del usuario
+                double pipValue = Symbols.GetSymbol(SymbolName).PipValue;
+
+                double slPips = Math.Abs(entryPrice - slPrice) / Symbol.PipSize;
+                double tpPips = Math.Abs(entryPrice - slPrice) / Symbol.PipSize;
+
+                // Calcula el volumen necesario basado en el precio específico de SL
+                double volume = CalculateVolumeForXAUUSDWithPrice(amountToRiskBuy, entryPrice, resultJson.sl_price, pipValue);
+                Print("entryPrice: ", entryPrice);
+                Print("Volumen necesario: ", volume, " onzas");
+                ExecuteMarketOrder(TradeType.Buy, SymbolName, volume, "Operacion abierta", slPips, tpPips);
+                return ;
+            }
+        }
+
+        public double CalculateVolumeForXAUUSDWithPrice(double riskAmount, double entryPrice, double slPrice, double pipValue)
+        {
+            // Calcula la diferencia entre el precio de entrada actual y el precio de stop loss
+            double priceDifference = Math.Abs(entryPrice - slPrice);
+
+            // Calcula el riesgo por pip
+            // La diferencia de precio se convierte a pips dividiendo por el tamaño del pip (ej. 0.01 para XAUUSD)
+            double riskPerPip = riskAmount / (priceDifference / Symbols.GetSymbol(SymbolName).PipSize);
+
+            // Calcula el volumen necesario. El valor de pip aquí se asume por unidad (onza en caso de XAUUSD)
+            double volumeInOunces = riskPerPip / pipValue;
+
+            return Math.Round(volumeInOunces);
+        }
+
+        private void SendTelegramMessage(string message)
+        {
+
+            string url = $"https://api.telegram.org/bot{TelegramBotToken}/sendMessage?chat_id={TelegramChatID}&text={message}";
+
+            var uri = new Uri(url);
+            
+            var postRequest = new HttpRequest(uri);
+
+            postRequest.Method = HttpMethod.Post;
+
+            var response = Http.Send(postRequest);
+
+        }
+
+        private bool BotAccessValidation(string accountNumber)
+        {
+            string url = $"{BotAccessUrl}/access-validation/{UserCode}/{accountNumber}/tradingview_alert_bot_enabled/";
+
+            var response = Http.Get(url);
+
+            if (response.IsSuccessful)
+            {
+                var resultJson = JsonSerializer.Deserialize<BotAccessResponse>(response.Body);
+                Print($"ResultJson: {resultJson.result}");
+                return resultJson.result;
+            }
+            return false;
+        }
+    }
+
+    public class BotAccessResponse
+    {
+        public bool result { get; set; }
+    }
+
+    public class SignalResponse
+    {
+        public bool detail { get; set; }
+        public string signal_type { get; set; }
+        public double sl_price { get; set; }
+        public double tp_price { get; set; }
+        public double price_for_be { get; set; }
+        public bool close_trade { get; set; }
+    }
+}
