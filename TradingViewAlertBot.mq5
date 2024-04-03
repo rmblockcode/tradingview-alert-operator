@@ -19,11 +19,10 @@ input string telegramChatID = "-1002011844853"; // Ingresa tu Telegram Chat ID
 input string telegramBotToken = "7012376231:AAFabuLwS7y5L6E7vz6_LGCHA7SP87GaVaM"; // Ingresa tu Telegram API Token
 
 // User Access
-input string botUrl = "https://tradingbot-access.onrender.com"; // No editar al menos que sea indicado
+string botUrl = "https://tradingbot-access.onrender.com"; // No editar al menos que sea indicado
+string signalUrl = "https://tradingview-alert-operator.onrender.com"; // No editar al menos que sea indicado
 
-input string signalUrl = "https://tradingview-alert-operator.onrender.com"; // No editar al menos que sea indicado
-
-input int timeout = 5000; // Timeout
+int timeout = 5000; // Timeout
 
 bool userAccessValidated = false; // Flag para indicar si el bot esta habilitado para el usuario y la cuenta
 

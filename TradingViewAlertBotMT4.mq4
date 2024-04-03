@@ -11,8 +11,9 @@
 #include <JAson.mqh>
 
 
-input string signalUrl = "https://tradingview-alert-operator.onrender.com"; // No editar al menos que sea indicado
+
 input string userCode = "joedoe"; // Código de usuario (Solicitar)
+input int slippage = 3; // Diferencia máxima en puntos entre el precio solicitado y el ejecutado
 //input string telegramChatID = "-1111111111111"; // Ingresa tu Telegram Chat ID
 //input string telegramBotToken = "700000000:AAFabuLwS7y5L6E7vz6_LGCHA7SP87GaXYZ"; // Ingresa tu Telegram API Token
 
@@ -21,9 +22,11 @@ input string telegramChatID = "-1002011844853"; // Ingresa tu Telegram Chat ID
 input string telegramBotToken = "7012376231:AAFabuLwS7y5L6E7vz6_LGCHA7SP87GaVaM"; // Ingresa tu Telegram API Token
 
 // User Access
-input string botUrl = "https://tradingbot-access.onrender.com"; // No editar al menos que sea indicado
-input int timeout = 5000; // Timeout
+string botUrl = "https://tradingbot-access.onrender.com"; // No editar al menos que sea indicado
+int timeout = 5000; // Timeout
 
+
+string signalUrl = "https://tradingview-alert-operator.onrender.com"; // No editar al menos que sea indicado
 bool isOpenPositionInDay = false;
 bool userAccessValidated = false; // Flag para indicar si el bot esta habilitado para el usuario y la cuenta
 
@@ -55,7 +58,11 @@ int OnInit()
 void OnDeinit(const int reason)
   {
 //---
-   
+   string telegramMessage = StringFormat(
+      "El bot fue cerrado de la cuenta %s",
+   IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)));
+   sendTelegramMessage(telegramMessage, telegramChatID, telegramBotToken);
+   Print(telegramMessage);
   }
 //+------------------------------------------------------------------+
 //| Expert tick function                                             |
@@ -63,9 +70,7 @@ void OnDeinit(const int reason)
 void OnTick()
   {
 //---
-   if (isOpenPositionInDay ==false){
-      getSignal();
-   }
+   getSignal();
    return;
   }
 //+------------------------------------------------------------------+
@@ -77,7 +82,6 @@ void getSignal() {
    char result[];
    char post[];
    string resultMessage;
-   int timeout = 5000;
    int response;
    bool b;
 
@@ -127,7 +131,7 @@ void getSignal() {
          Print("stopLossPrice: ", stopLossPrice);
          Print("takeProfitPrice: ", takeProfitPrice);
          // Usa OrderSend para abrir una compra
-         int ticket = OrderSend(symbol, OP_BUY, lotSize, currentPrice, 3, stopLossPrice, takeProfitPrice, "[BUY OPENED] TradingView Alert Bot", 0, 0, clrGreen);
+         int ticket = OrderSend(symbol, OP_BUY, lotSize, currentPrice, slippage, stopLossPrice, takeProfitPrice, "[BUY OPENED] TradingView Alert Bot", 0, 0, clrGreen);
          
          if(ticket < 0) {
             Print("Error al abrir una operación de compra: ", GetLastError());
@@ -157,12 +161,13 @@ void getSignal() {
          Print("takeProfitPrice: ", takeProfitPrice);
          
          // Usa OrderSend para abrir una venta
-         int ticket = OrderSend(symbol, OP_SELL, lotSize, currentPrice, 80, stopLossPrice, takeProfitPrice, "[SELL OPENED] TradingView Alert Bot", 0, 0, clrRed);
+         int ticket = OrderSend(symbol, OP_SELL, lotSize, currentPrice, slippage, stopLossPrice, takeProfitPrice, "[SELL OPENED] TradingView Alert Bot", 0, 0, clrRed);
          
          if(ticket < 0) {
             Print("Error al abrir una operación de venta: ", GetLastError());
          } else {
             Print("Operación de venta abierta con éxito. Ticket: ", ticket);
+
             string telegramMessage = StringFormat(
                               "[VENTA ACTIVADA MT4] Precio Apertura: %s ; Precio de TP: %s; Precio SL: %s",
                               DoubleToString(currentPrice),

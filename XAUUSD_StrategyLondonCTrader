@@ -19,29 +19,49 @@ namespace cAlgo.Robots
         [Parameter(DefaultValue = "Codigo de Usuario")]
         public string UserCode { get; set; }
 
-        [Parameter(DefaultValue = "Telegram Chat ID")]
+        [Parameter("Hora de Inicio (NY)", DefaultValue = "03:00:00", Group = "Horario Operativo")]
+        public string StartTimeString { get; set; }
+
+        [Parameter("Hora de Fin (NY)", DefaultValue = "06:45:00", Group = "Horario Operativo")]
+        public string EndTimeString { get; set; }
+
+        [Parameter(DefaultValue = "Telegram Chat ID", Group = "Configuración de Telegram")]
         public string TelegramChatID { get; set; }
 
-        [Parameter(DefaultValue = "Telegram API Token")]
+        [Parameter(DefaultValue = "Telegram API Token", Group = "Configuración de Telegram")]
         public string TelegramBotToken { get; set; }
 
         [Parameter(DefaultValue = "Monto a Arriesgar para operaciones en Compra")]
         public double amountToRiskBuy { get; set; }
 
         [Parameter(DefaultValue = "Monto a Arriesgar para operaciones en Venta")]
-        public string amountToRiskSell { get; set; }
+        public double amountToRiskSell { get; set; }
 
-        [Parameter(DefaultValue = "https://tradingbot-access.onrender.com")]
-        public string BotAccessUrl { get; set; }
+        // [Parameter(DefaultValue = "https://tradingbot-access.onrender.com", Group = "Configuración General (No Modificar)")]
+        // public string BotAccessUrl { get; set; }
 
-        [Parameter(DefaultValue = "https://tradingview-alert-operator.onrender.com")]
-        public string SignalUrl { get; set; }
+        // [Parameter(DefaultValue = "https://tradingview-alert-operator.onrender.com", Group = "Configuración General (No Modificar)")]
+        // public string SignalUrl { get; set; }
+
+
+        // API URLS
+        private string BotAccessUrl = "https://tradingbot-access.onrender.com";
+        private string SignalUrl = "https://tradingview-alert-operator.onrender.com";
+
+        private DateTime lastTradeDate = DateTime.MinValue;
+
+        private long openedPositionId = -1; // Variable para almacenar el ID de la posición abierta
+        private string positionLabel = "";
+        private TimeSpan startTime;
+        private TimeSpan endTime;
+        private double priceForBE = 0.0;
 
         protected override void OnStart()
         {
             // Tu código de inicialización aquí
             Print($"Account number: {Account.Number}");
-            //SendTelegramMessage("INICIANDO TRADINGVIEW ALERT BOT EN CTRADER...");
+            Print("Es real: ", Account.IsLive);
+            SendTelegramMessage("INICIANDO TRADINGVIEW ALERT BOT EN CTRADER...");
 
             bool botAccessValidation = BotAccessValidation(Account.Number.ToString());
 
@@ -51,14 +71,44 @@ namespace cAlgo.Robots
                 Stop();
             }
 
-            //SendTelegramMessage("¡INICIO DE BOT SATISFACTORIO!");
-            GetSignal();
+            foreach (var position in Positions)
+            {
+                if (position.SymbolName == SymbolName && position.EntryTime.Date == Server.Time.Date)
+                {
+                    Print("Ya existe una operación abierta para ", SymbolName, " en el día actual.");
+                    break;
+                }
+            }
+
+            startTime = TimeSpan.Parse(StartTimeString);
+            endTime = TimeSpan.Parse(EndTimeString);
+            
+            // Ajustar al horario UTC según la diferencia horaria actual entre UTC y Nueva York
+            int nyOffset = GetNyOffset();
+            startTime = startTime.Add(TimeSpan.FromHours(nyOffset));
+            endTime = endTime.Add(TimeSpan.FromHours(nyOffset));
+            
+            Print("Horario operativo ajustado a UTC: Inicio ", startTime, ", Fin ", endTime);
+
+            SendTelegramMessage("¡INICIO DE BOT SATISFACTORIO!");
+            //GetSignal();
         }
 
         protected override void OnTick()
         {
             // Handle price updates here
-            //GetSignal();
+            // Obtiene la hora actual en UTC
+            TimeSpan currentTime = Server.Time.TimeOfDay;
+     
+            if (!(currentTime >= startTime && currentTime <= endTime)  && openedPositionId == -1)
+            {
+                Print("Ya pasó horario operativo y no hay transacciones abiertas.");
+            }
+            else
+            {
+                GetSignal();
+                return;
+            }
         }
 
         protected override void OnStop()
@@ -66,6 +116,7 @@ namespace cAlgo.Robots
             // Handle cBot stop here
             //SendTelegramMessage($"Bot apagado en la cuenta {Account.Number.ToString()} en CTrader!");
         }
+
 
         private void GetSignal()
         {
@@ -86,21 +137,139 @@ namespace cAlgo.Robots
                 Print($"close_trade: {resultJson.close_trade}");
                 double slPrice = resultJson.sl_price;
                 double tpPrice = resultJson.tp_price;
-
-                // Obtiene el precio de entrada actual como el precio Ask para una operación de compra
-                double entryPrice = Symbols.GetSymbol(SymbolName).Ask;
+                priceForBE = resultJson.price_for_be;
+                bool openTrade = resultJson.detail;
+                string signalType = resultJson.signal_type;
+                bool closeTrade = resultJson.close_trade;
 
                 // Obtiene el valor de un pip para una onza de oro (XAUUSD) en la cuenta del usuario
                 double pipValue = Symbols.GetSymbol(SymbolName).PipValue;
 
-                double slPips = Math.Abs(entryPrice - slPrice) / Symbol.PipSize;
-                double tpPips = Math.Abs(entryPrice - slPrice) / Symbol.PipSize;
+                if (openTrade)
+                {
+                    if (signalType == "buy" && !closeTrade){
 
-                // Calcula el volumen necesario basado en el precio específico de SL
-                double volume = CalculateVolumeForXAUUSDWithPrice(amountToRiskBuy, entryPrice, resultJson.sl_price, pipValue);
-                Print("entryPrice: ", entryPrice);
-                Print("Volumen necesario: ", volume, " onzas");
-                ExecuteMarketOrder(TradeType.Buy, SymbolName, volume, "Operacion abierta", slPips, tpPips);
+                        if (openedPositionId == -1) // Abriremos compra porque llego señal y no es de orden de cerrar. Ademas no hay operacion abierta
+                        {
+                            // Obtiene el precio de entrada actual como el precio Ask para una operación de compra
+                            double entryPrice = Symbols.GetSymbol(SymbolName).Ask;
+                            double slPips = Math.Abs(entryPrice - slPrice) / Symbol.PipSize;
+                            double tpPips = Math.Abs(entryPrice - tpPrice) / Symbol.PipSize;
+
+                            // Calcula el volumen necesario basado en el precio específico de SL
+                            double volume = CalculateVolumeForXAUUSDWithPrice(amountToRiskBuy, entryPrice, slPrice, pipValue);
+                            Print("entryPrice Compra para calculo de volumen: ", entryPrice);
+                            Print("Volumen necesario: ", volume, " onzas");
+
+                            positionLabel = "BUY OPENED";
+                            var result = ExecuteMarketOrder(TradeType.Buy, SymbolName, volume, positionLabel, slPips, tpPips); 
+
+                            if (result.IsSuccessful)
+                            {
+                                openedPositionId = result.Position.Id;
+                                double positionEntryPrice = result.Position.EntryPrice;
+                                double positionTakeProfit = result.Position.TakeProfit ?? 0.0;
+                                double positionStopLoss = result.Position.StopLoss ?? 0.0;
+                                string telegramMessage = $@"[COMPRA] Precio Apertura: {positionEntryPrice}; Precio de TP: {positionTakeProfit}; Precio de SL: {positionStopLoss}; Precio de BE: {priceForBE}; PositionId: {openedPositionId}";
+                                SendTelegramMessage(telegramMessage);
+                            }
+                            else 
+                            {
+                                Print($@"[COMPRA] Error al abrir operacion: {result.Error}");
+                            }
+                        }
+                        else // Hay operacion abierta pero aun no hay señal de cierre, verificamos si ponemos BE
+                        {
+                            var position = Positions.Find(positionLabel);
+                            if (priceForBE > 0.0 && Symbols.GetSymbol(SymbolName).Bid >= priceForBE) 
+                            {
+                                var result = ModifyPosition(position, position.EntryPrice, position.TakeProfit);
+
+                                if (result.IsSuccessful)
+                                {
+                                    string telegramMessage = $@"[COMPRA] Modificada operación a Breakeven: {position.EntryPrice}";
+                                    SendTelegramMessage(telegramMessage);
+                                }
+                                else 
+                                {
+                                    Print($@"[COMPRA] Error colocando Breakeven: {result.Error}");
+                                }
+                            }
+                        }
+                        
+                        
+                    }
+                    else if (signalType == "sell" && !closeTrade)
+                    {
+                        if (openedPositionId == -1) // Abriremos venta porque hay señal de venta y no es orden de cerrar. Ademas no hay operacion abierta
+                        {
+                            // Obtiene el precio de entrada actual como el precio Bid para una operación de venta
+                            double entryPrice = Symbols.GetSymbol(SymbolName).Bid;
+                            double slPips = Math.Abs(entryPrice - slPrice) / Symbol.PipSize;
+                            double tpPips = Math.Abs(entryPrice - tpPrice) / Symbol.PipSize;
+
+                            // Calcula el volumen necesario basado en el precio específico de SL
+                            double volume = CalculateVolumeForXAUUSDWithPrice(amountToRiskSell, entryPrice, slPrice, pipValue);
+                            Print("entryPrice Venta para calculo de volumen : ", entryPrice);
+                            Print("Volumen necesario: ", volume, " onzas");
+                            positionLabel = "SELL OPENED";
+                            var result = ExecuteMarketOrder(TradeType.Sell, SymbolName, volume, positionLabel, slPips, tpPips);
+
+                            if (result.IsSuccessful)
+                            {
+                                openedPositionId = result.Position.Id;
+                                double positionEntryPrice = result.Position.EntryPrice;
+                                double positionTakeProfit = result.Position.TakeProfit ?? 0.0;
+                                double positionStopLoss = result.Position.StopLoss ?? 0.0   ;
+                                string telegramMessage = $@"[VENTA] Precio Apertura: {positionEntryPrice};  Precio de TP: {positionTakeProfit}; Precio de SL: {positionStopLoss}; Precio de BE: {priceForBE}; PositionId: {openedPositionId}";
+                                SendTelegramMessage(telegramMessage);
+                            }
+                            else 
+                            {
+                                Print($@"[VENTA] Error al abrir operacion: {result.Error}");
+                            }
+                        }
+                        else // Hay operacion abierta pero aun no hay señal de cierre, verificamos si ponemos BE
+                        {   
+                            var position = Positions.Find(positionLabel);
+                            if (priceForBE > 0.0 && Symbols.GetSymbol(SymbolName).Ask <= priceForBE) 
+                            {
+                                var result = ModifyPosition(position, position.EntryPrice, position.TakeProfit);
+
+                                if (result.IsSuccessful)
+                                {
+                                    string telegramMessage = $@"[VENTA] Modificada operación a Breakeven: {position.EntryPrice}";
+                                    SendTelegramMessage(telegramMessage);
+                                }
+                                else 
+                                {
+                                    Print($@"[VENTA] Error colocando Breakeven: {result.Error}");
+                                }
+                            }
+                        }
+                    }
+                    else if (closeTrade && openedPositionId != -1) { // Si se manda a cerrar operacion
+                        var position = Positions.Find(positionLabel);
+                        if (position != null && position.Id == openedPositionId)
+                        {
+                            var result = ClosePosition(position);
+                            if (result.IsSuccessful)
+                            {
+                                Print("Posición cerrada con éxito. ID: ", openedPositionId);
+                                openedPositionId = -1; // Resetea el ID una vez que la posición se cierra
+                                positionLabel = "";
+                                priceForBE = 0.0;
+
+                            }
+                            else
+                            {
+                                Print("Error al cerrar la posición. ID: ", openedPositionId);
+                            }
+                        }
+                    }
+
+                }
+
                 return ;
             }
         }
@@ -148,6 +317,34 @@ namespace cAlgo.Robots
                 return resultJson.result;
             }
             return false;
+        }
+
+        private bool HasOpenedTradeToday(string symbol)
+        {
+            // Obtiene la fecha actual en UTC
+            DateTime today = Server.Time.Date;
+
+            // Itera a través de todas las posiciones abiertas
+            foreach (var position in Positions)
+            {
+                // Verifica si la posición corresponde al símbolo objetivo y fue abierta hoy
+                if (position.SymbolName== symbol && position.EntryTime.Date == today)
+                {
+                    return true; // Retorna verdadero si encuentra una coincidencia
+                }
+            }
+
+            // Retorna falso si no se encuentra ninguna operación que coincida con los criterios
+            return false;
+        }
+
+        // Esta función determina la diferencia horaria actual entre UTC y Nueva York
+        private int GetNyOffset()
+        {
+            // Nueva York está en la zona horaria UTC-5 pero cambia a UTC-4 durante el horario de verano
+            var nyTimeZoneInfo = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
+            var nyCurrentTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, nyTimeZoneInfo);
+            return -nyTimeZoneInfo.GetUtcOffset(nyCurrentTime).Hours;
         }
     }
 
