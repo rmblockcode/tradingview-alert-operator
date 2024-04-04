@@ -232,6 +232,35 @@ async def create_tradingview_alert_gold_london(
 
     return {'message': 'Datos almacenados exitosamente'}
 
+@app.post("/tradingview-alert-gold-london/signal/set-be/")
+async def set_be_tradingview_alert_gold_london(
+    alert_data: TradingviewAlertGoldLondonRequest,
+    db: Session = Depends(get_db)):
+    
+    signal_type = alert_data.signal_type
+    prices = alert_data.prices
+    open_position = alert_data.open_position
+    timestamp = alert_data.timestamp
+
+    today = date.today()
+
+    today_signal = db.query(TradingviewAlertGoldLondonSignal).filter(
+        func.date(TradingviewAlertGoldLondonSignal.created_at) == today
+    ).first()
+
+    if open_position.startswith("BE-Exit") and today_signal:
+        # Set breakeven to this position
+        today_signal.set_be = True
+        db.commit()
+
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='No se encontró operación en el día o no fue una solicitud de BE'
+        )
+
+    return {'message': 'Datos almacenados exitosamente'}
+
 
 @app.get("/tradingview-alert-gold-london/signal/{user_code}/{account_number}/")
 async def get_tradingview_alert(user_code: str, account_number:str, db: Session = Depends(get_db)):

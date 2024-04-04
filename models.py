@@ -79,6 +79,7 @@ class TradingviewAlertGoldLondonSignal(Base):
     sl_price = Column(Float)
     tp_price = Column(Float)
     price_for_be = Column(Float)
+    set_be = Column(Boolean, default=False)
     close_trade = Column(Boolean, default=False)
     open_timestamp = Column(DateTime)
     close_timestamp = Column(DateTime, nullable=True)
