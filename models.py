@@ -77,6 +77,7 @@ class TradingviewAlertGoldLondonSignal(Base):
     updated_at = Column(DateTime, onupdate=func.now())
     signal_type = Column(String(4))
     sl_price = Column(Float)
+    sl_pips = Column(Float)
     tp_price = Column(Float)
     price_for_be = Column(Float)
     set_be = Column(Boolean, default=False)
