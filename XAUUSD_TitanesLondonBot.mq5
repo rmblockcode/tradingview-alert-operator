@@ -12,8 +12,8 @@ CTrade trade;
 
 
 input string userCode = "joedoe"; // Código de usuario (Solicitar)
-input int hourStartNY = 9; // Hora de NY de inicio operativo
-input int hourEndNY = 13; // Hora de NY de fin operativo
+input int hourStartNY = 3; // Hora de NY de inicio operativo
+input int hourEndNY = 6; // Hora de NY de fin operativo
 input int differenceOfHourNY = 7; // Diferencia de horas entre tu broker y la hora de Nueva York
 //input string telegramChatID = "-1111111111111"; // Ingresa tu Telegram Chat ID
 //input string telegramBotToken = "700000000:AAFabuLwS7y5L6E7vz6_LGCHA7SP87GaXYZ"; // Ingresa tu Telegram API Token
@@ -37,11 +37,13 @@ bool userAccessValidated = false; // Flag para indicar si el bot esta habilitado
 bool isOpenPositionInDay = false;
 ulong tradeTicketBuy = 0;
 ulong tradeTicketSell = 0;
-
+double amountToAddToSL = 0.75; // Cantidad a sumarle o restarle al SL para que pueda tomar el valor del de tradingview y no cerrar antes 
 double priceForBE = 0;
 double openPriceReal = 0;
 bool alreadyInBreakEvenBuy = false; // Flag para indicar que ya se modifico a BreakEven para compras
 bool alreadyInBreakEvenSell = false; // Flag para indicar que ya se modifico a BreakEven para ventas 
+
+int decimalDigits = 2;
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
@@ -119,7 +121,6 @@ void getSignal()
    string requestHeaders = "";
    char resultData[];
    char posData[];
-   int timeout=2000;
    bool b;
 
    long accountNumber = AccountInfoInteger(ACCOUNT_LOGIN);
@@ -134,6 +135,8 @@ void getSignal()
    double slPrice = js["sl_price"].ToDbl();
    double tpPrice = js["tp_price"].ToDbl();
    bool close_trade = js["close_trade"].ToBool();
+   bool set_be = js["set_be"].ToBool(); // Flag que indica si poner BE o no
+   double slPips = js["sl_pips"].ToDbl();
    priceForBE = js["price_for_be"].ToDbl();
    
    if (openTrade == true) { // Se abre operacion
@@ -148,34 +151,38 @@ void getSignal()
             Print("ABRO COMPRA. No hay operacion abierta, llego señal y no hay orden de cerrar");
             
             // First set StopLoss Price
-            double lotSize = CalculateLotSize(_Symbol, amountToRiskBuy, slPrice);
+            //double lotSize = CalculateLotSize(_Symbol, amountToRiskBuy, slPrice);
+            double lotSize = NormalizeDouble(amountToRiskBuy / slPips, decimalDigits);
+            
+            double newSL = slPrice - amountToAddToSL;
    
-            trade.Buy(lotSize, _Symbol, currentPrice, slPrice, tpPrice, "[BUY OPENED] XAUUSD Strategy London");
+            trade.Buy(lotSize, _Symbol, currentPrice, newSL, tpPrice, "[BUY OPENED] XAUUSD Strategy London");
             tradeTicketBuy = trade.ResultOrder();
             
             isOpenPositionInDay = true;
             
+            if(PositionSelectByTicket(tradeTicketBuy)) {
+                openPriceReal = PositionGetDouble(POSITION_PRICE_OPEN);
+                Print("Precio de apertura de la operación: ", openPriceReal);
+            }
+            
             double slReal = PositionGetDouble(POSITION_SL);
             double tpReal = PositionGetDouble(POSITION_TP);
-            openPriceReal = PositionGetDouble(POSITION_PRICE_OPEN);
             
             string telegramMessage = StringFormat(
-                                 "[COMPRA ACTIVADA] Precios teóricos => Precio Apertura: %s ; Precio de TP: %s; Precio SL: %s | Precios Reales => Precio Apertura: %s ; Precio de TP: %s; Precio SL: %s",
-                                 DoubleToString(currentPrice),
-                                 DoubleToString(slPrice),
-                                 DoubleToString(tpPrice),
-                                 DoubleToString(openPriceReal),
-                                 DoubleToString(tpReal),
-                                 DoubleToString(slReal));
+                                 "[COMPRA ACTIVADA] Precio Apertura: %s",
+                                 DoubleToString(openPriceReal));
    
             Print(telegramMessage);
    
             sendTelegramMessage(telegramMessage, telegramChatID, telegramBotToken);  
          } else {
             // Hay operacion abierta pero aun no hay señal de cierre, verificamos si ponemos BE
-            if(priceForBE > 0 && currentPrice >= priceForBE && alreadyInBreakEvenBuy == false) {
+            if(set_be == true && alreadyInBreakEvenBuy == false) {
                trade.PositionModify(tradeTicketBuy, openPriceReal, tpPrice);
                alreadyInBreakEvenBuy = true;
+               string telegramMessage = "Movido SL a BreakEven";
+               sendTelegramMessage(telegramMessage, telegramChatID, telegramBotToken);
             }
          }
 
@@ -186,34 +193,37 @@ void getSignal()
          if(PositionSelectByTicket(tradeTicketSell) == false && isOpenPositionInDay == false){
             // Abriremos compra porque no hay operacion abierta, llego señal y no hay orden de cerrar
             Print("ABRO VENTA. No hay operacion abierta, llego señal y no hay orden de cerrar");
-            double lotSize = CalculateLotSize(_Symbol, amountToRiskSell, slPrice);
-
-            trade.Sell(lotSize, _Symbol, currentPrice, slPrice, tpPrice, "[SELL OPENED] XAUUSD Strategy London");
+            //double lotSize = CalculateLotSize(_Symbol, amountToRiskSell, slPrice);
+            double lotSize = NormalizeDouble(amountToRiskSell / slPips, decimalDigits);
+            double newSL = slPrice - amountToAddToSL;
+            
+            trade.Sell(lotSize, _Symbol, currentPrice, newSL, tpPrice, "[SELL OPENED] XAUUSD Strategy London");
             tradeTicketSell = trade.ResultOrder();
             
             isOpenPositionInDay = true;
             
             double slReal = PositionGetDouble(POSITION_SL);
             double tpReal = PositionGetDouble(POSITION_TP);
-            openPriceReal = PositionGetDouble(POSITION_PRICE_OPEN);
+            
+            if(PositionSelectByTicket(tradeTicketSell)) {
+                openPriceReal = PositionGetDouble(POSITION_PRICE_OPEN);
+                Print("Precio de apertura de la operación: ", openPriceReal);
+            }
             
             string telegramMessage = StringFormat(
-                                 "[VENTA ACTIVADA] Precios teóricos => Precio Apertura: %s ; Precio de TP: %s; Precio SL: %s | Precios Reales => Precio Apertura: %s ; Precio de TP: %s; Precio SL: %s",
-                                 DoubleToString(currentPrice),
-                                 DoubleToString(tpPrice),
-                                 DoubleToString(slPrice),
-                                 DoubleToString(openPriceReal),
-                                 DoubleToString(tpReal),
-                                 DoubleToString(slReal));
+                                 "[VENTA ACTIVADA] Precio Apertura: %s",
+                                 DoubleToString(openPriceReal));
    
             Print(telegramMessage);
    
             sendTelegramMessage(telegramMessage, telegramChatID, telegramBotToken);
          } else {
             // Hay operacion abierta pero aun no hay señal de cierre, verificamos si ponemos BE
-            if(priceForBE > 0 && currentPrice <= priceForBE && alreadyInBreakEvenSell == false) {
+            if(set_be == true && alreadyInBreakEvenSell == false) {
                trade.PositionModify(tradeTicketSell, openPriceReal, tpPrice);
                alreadyInBreakEvenBuy = true;
+               string telegramMessage = "Movido SL a BreakEven";
+               sendTelegramMessage(telegramMessage, telegramChatID, telegramBotToken);
             }
          }
       } else if(close_trade == true) {
@@ -260,7 +270,6 @@ bool botAccessRequest(string remainUrl)
    CJAVal js (NULL, jtUNDEF);
    
    string resultMessage = CharArrayToString(resultData);
-   string out;
    b = js.Deserialize(resultMessage);
    //js.Serialize(out);
    return js["result"].ToBool();
@@ -273,7 +282,7 @@ bool botAccessRequest(string remainUrl)
 //+------------------------------------------------------------------+
 bool botAccessValidation(string accountNumber)
   {
-   string remainUrl = StringFormat("access-validation/%s/%s/tradingview_alert_bot_enabled/", userCode, IntegerToString(accountNumber));
+   string remainUrl = StringFormat("access-validation/%s/%s/tradingview_alert_bot_enabled/", userCode, accountNumber);
 
    bool response = botAccessRequest(remainUrl);
 
