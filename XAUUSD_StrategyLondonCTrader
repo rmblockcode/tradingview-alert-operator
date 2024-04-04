@@ -55,6 +55,7 @@ namespace cAlgo.Robots
         private TimeSpan startTime;
         private TimeSpan endTime;
         private double priceForBE = 0.0;
+        private double amountToAddToSL = 0.75;
 
         protected override void OnStart()
         {
@@ -89,6 +90,24 @@ namespace cAlgo.Robots
             endTime = endTime.Add(TimeSpan.FromHours(nyOffset));
             
             Print("Horario operativo ajustado a UTC: Inicio ", startTime, ", Fin ", endTime);
+            
+            double volume = CalculateVolumeForXAUUSDWithPips(amountToRiskBuy, 150.0);
+            Print("VOLUME: ", volume);
+            
+            //var result = ExecuteMarketOrder(TradeType.Buy, SymbolName, 150, positionLabel, 150.0, 300.0);
+            // Obtiene los precios Ask y Bid actuales para el símbolo especificado
+            double askPrice = Symbol.Ask;
+            double bidPrice = Symbol.Bid;
+            
+            // Calcula el spread restando el Bid del Ask
+            double spread = askPrice - bidPrice;
+            
+            // Convierte el spread a pips. El factor de conversión depende del símbolo
+            // Para la mayoría de los pares de Forex, 1 pip = 0.0001, pero para pares con JPY es 0.01
+            // Aquí se asume un factor de conversión estándar (1 pip = 0.0001)
+            double spreadInPips = spread / Symbol.PipSize;
+            
+            Print("El spread actual para EURUSD es de ", spreadInPips, " pips.");
 
             SendTelegramMessage("¡INICIO DE BOT SATISFACTORIO!");
             //GetSignal();
@@ -114,7 +133,7 @@ namespace cAlgo.Robots
         protected override void OnStop()
         {
             // Handle cBot stop here
-            //SendTelegramMessage($"Bot apagado en la cuenta {Account.Number.ToString()} en CTrader!");
+            SendTelegramMessage($"Bot apagado en la cuenta {Account.Number.ToString()} en CTrader!");
         }
 
 
@@ -134,6 +153,7 @@ namespace cAlgo.Robots
                 Print($"sl_price: {resultJson.sl_price}");
                 Print($"tp_price: {resultJson.tp_price}");
                 Print($"price_for_be: {resultJson.price_for_be}");
+                Print($"set_be: {resultJson.set_be}");
                 Print($"close_trade: {resultJson.close_trade}");
                 double slPrice = resultJson.sl_price;
                 double tpPrice = resultJson.tp_price;
@@ -141,6 +161,8 @@ namespace cAlgo.Robots
                 bool openTrade = resultJson.detail;
                 string signalType = resultJson.signal_type;
                 bool closeTrade = resultJson.close_trade;
+                bool set_be = resultJson.set_be;
+                double slPips = resultJson.sl_pips;
 
                 // Obtiene el valor de un pip para una onza de oro (XAUUSD) en la cuenta del usuario
                 double pipValue = Symbols.GetSymbol(SymbolName).PipValue;
@@ -153,16 +175,18 @@ namespace cAlgo.Robots
                         {
                             // Obtiene el precio de entrada actual como el precio Ask para una operación de compra
                             double entryPrice = Symbols.GetSymbol(SymbolName).Ask;
-                            double slPips = Math.Abs(entryPrice - slPrice) / Symbol.PipSize;
+                            double newSL = slPrice - amountToAddToSL;
+                            double newSLPips = Math.Abs(entryPrice - newSL) / Symbol.PipSize; // Se pone newSL para ampliarlo en la operacion y evitar que se cierre antes de la alerta de Tradingview
                             double tpPips = Math.Abs(entryPrice - tpPrice) / Symbol.PipSize;
 
                             // Calcula el volumen necesario basado en el precio específico de SL
-                            double volume = CalculateVolumeForXAUUSDWithPrice(amountToRiskBuy, entryPrice, slPrice, pipValue);
+                            //double volume = CalculateVolumeForXAUUSDWithPrice(amountToRiskBuy, entryPrice, slPrice, pipValue);
+                            double volume = CalculateVolumeForXAUUSDWithPips(amountToRiskBuy, slPips);
                             Print("entryPrice Compra para calculo de volumen: ", entryPrice);
                             Print("Volumen necesario: ", volume, " onzas");
 
                             positionLabel = "BUY OPENED";
-                            var result = ExecuteMarketOrder(TradeType.Buy, SymbolName, volume, positionLabel, slPips, tpPips); 
+                            var result = ExecuteMarketOrder(TradeType.Buy, SymbolName, volume, positionLabel, newSLPips, tpPips); 
 
                             if (result.IsSuccessful)
                             {
@@ -170,7 +194,7 @@ namespace cAlgo.Robots
                                 double positionEntryPrice = result.Position.EntryPrice;
                                 double positionTakeProfit = result.Position.TakeProfit ?? 0.0;
                                 double positionStopLoss = result.Position.StopLoss ?? 0.0;
-                                string telegramMessage = $@"[COMPRA] Precio Apertura: {positionEntryPrice}; Precio de TP: {positionTakeProfit}; Precio de SL: {positionStopLoss}; Precio de BE: {priceForBE}; PositionId: {openedPositionId}";
+                                string telegramMessage = $@"[COMPRA] Precio Apertura: {positionEntryPrice}; PositionId: {openedPositionId}";
                                 SendTelegramMessage(telegramMessage);
                             }
                             else 
@@ -181,7 +205,7 @@ namespace cAlgo.Robots
                         else // Hay operacion abierta pero aun no hay señal de cierre, verificamos si ponemos BE
                         {
                             var position = Positions.Find(positionLabel);
-                            if (priceForBE > 0.0 && Symbols.GetSymbol(SymbolName).Bid >= priceForBE) 
+                            if (set_be) 
                             {
                                 var result = ModifyPosition(position, position.EntryPrice, position.TakeProfit);
 
@@ -205,15 +229,17 @@ namespace cAlgo.Robots
                         {
                             // Obtiene el precio de entrada actual como el precio Bid para una operación de venta
                             double entryPrice = Symbols.GetSymbol(SymbolName).Bid;
-                            double slPips = Math.Abs(entryPrice - slPrice) / Symbol.PipSize;
+                            double newSL = slPrice - amountToAddToSL;
+                            double newSLPips = Math.Abs(entryPrice - newSL) / Symbol.PipSize;
                             double tpPips = Math.Abs(entryPrice - tpPrice) / Symbol.PipSize;
 
                             // Calcula el volumen necesario basado en el precio específico de SL
-                            double volume = CalculateVolumeForXAUUSDWithPrice(amountToRiskSell, entryPrice, slPrice, pipValue);
+                            //double volume = CalculateVolumeForXAUUSDWithPrice(amountToRiskSell, entryPrice, slPrice, pipValue);
+                            double volume = CalculateVolumeForXAUUSDWithPips(amountToRiskSell, slPips);
                             Print("entryPrice Venta para calculo de volumen : ", entryPrice);
                             Print("Volumen necesario: ", volume, " onzas");
                             positionLabel = "SELL OPENED";
-                            var result = ExecuteMarketOrder(TradeType.Sell, SymbolName, volume, positionLabel, slPips, tpPips);
+                            var result = ExecuteMarketOrder(TradeType.Sell, SymbolName, volume, positionLabel, newSLPips, tpPips);
 
                             if (result.IsSuccessful)
                             {
@@ -221,7 +247,7 @@ namespace cAlgo.Robots
                                 double positionEntryPrice = result.Position.EntryPrice;
                                 double positionTakeProfit = result.Position.TakeProfit ?? 0.0;
                                 double positionStopLoss = result.Position.StopLoss ?? 0.0   ;
-                                string telegramMessage = $@"[VENTA] Precio Apertura: {positionEntryPrice};  Precio de TP: {positionTakeProfit}; Precio de SL: {positionStopLoss}; Precio de BE: {priceForBE}; PositionId: {openedPositionId}";
+                                string telegramMessage = $@"[VENTA] Precio Apertura: {positionEntryPrice}; PositionId: {openedPositionId}";
                                 SendTelegramMessage(telegramMessage);
                             }
                             else 
@@ -232,7 +258,7 @@ namespace cAlgo.Robots
                         else // Hay operacion abierta pero aun no hay señal de cierre, verificamos si ponemos BE
                         {   
                             var position = Positions.Find(positionLabel);
-                            if (priceForBE > 0.0 && Symbols.GetSymbol(SymbolName).Ask <= priceForBE) 
+                            if (set_be) 
                             {
                                 var result = ModifyPosition(position, position.EntryPrice, position.TakeProfit);
 
@@ -259,6 +285,8 @@ namespace cAlgo.Robots
                                 openedPositionId = -1; // Resetea el ID una vez que la posición se cierra
                                 positionLabel = "";
                                 priceForBE = 0.0;
+                                string telegramMessage = "Se ha cerrado la operación";
+                                SendTelegramMessage(telegramMessage);
 
                             }
                             else
@@ -272,6 +300,18 @@ namespace cAlgo.Robots
 
                 return ;
             }
+        }
+        
+        public double CalculateVolumeForXAUUSDWithPips(double riskAmount, double slPips)
+        {
+            // Escala el número para preservar dos dígitos después del punto decimal
+            double scaled = (riskAmount / slPips) * 100;
+            
+            // Trunca el número escalado para eliminar los dígitos después de los dos dígitos decimales
+            double truncated = Math.Truncate(scaled);
+            
+            // Re-escala el número de vuelta a su tamaño original
+            return truncated / 100;
         }
 
         public double CalculateVolumeForXAUUSDWithPrice(double riskAmount, double entryPrice, double slPrice, double pipValue)
@@ -358,8 +398,10 @@ namespace cAlgo.Robots
         public bool detail { get; set; }
         public string signal_type { get; set; }
         public double sl_price { get; set; }
+        public double sl_pips { get; set; }
         public double tp_price { get; set; }
         public double price_for_be { get; set; }
         public bool close_trade { get; set; }
+        public bool set_be { get; set; }
     }
 }
