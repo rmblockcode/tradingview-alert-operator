@@ -65,8 +65,14 @@ int OnInit()
    
    sendTelegramMessage("¡INICIO DE BOT SATISFACTORIO!", telegramChatID, telegramBotToken);
    //getSignal();
+   double pipValue = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
+   Print("pipValue: ", pipValue);
+   double sl = 2296.013;
+   double newSL = sl - (746*0.001);
+   Print("newSL: ", newSL);
    return(INIT_SUCCEEDED);
   }
+  
 //+------------------------------------------------------------------+
 //| Expert deinitialization function                                 |
 //+------------------------------------------------------------------+
@@ -151,40 +157,35 @@ void getSignal() {
             // First set StopLoss Price
             double lotSize = CalculateLotSize(_Symbol, amountToRiskBuy, slPrice);
    
-            trade.Buy(lotSize, _Symbol, currentPrice, slPrice, tpPrice, "[BUY OPENED] XAUUSD Strategy London");
-            tradeTicketBuy = trade.ResultOrder();
+            int ticket = OrderSend(_Symbol, OP_BUY, lotSize, currentPrice, slippage, slPrice, tpPrice, "[BUY OPENED] TradingView Alert Bot", 0, 0, clrGreen);
+         
+            if(ticket < 0) {
+               Print("Error al abrir una operación de compra: ", GetLastError());
+            } else {
+               Print("Operación de compra abierta con éxito. Ticket: ", ticket);
+               double openPrice = OrderOpenPrice();
+               string telegramMessage = StringFormat(
+                                 "[COMPRA ACTIVADA MT4] Precio Apertura en: %s",
+                                 DoubleToString(currentPrice));
             
-            isOpenPositionInDay = true;
+               Print(telegramMessage);
             
-            double slReal = PositionGetDouble(POSITION_SL);
-            double tpReal = PositionGetDouble(POSITION_TP);
-            openPriceReal = PositionGetDouble(POSITION_PRICE_OPEN);
-            
-            string telegramMessage = StringFormat(
-                                 "[COMPRA ACTIVADA] Precios teóricos => Precio Apertura: %s ; Precio de TP: %s; Precio SL: %s | Precios Reales => Precio Apertura: %s ; Precio de TP: %s; Precio SL: %s",
-                                 DoubleToString(currentPrice),
-                                 DoubleToString(slPrice),
-                                 DoubleToString(tpPrice),
-                                 DoubleToString(openPriceReal),
-                                 DoubleToString(tpReal),
-                                 DoubleToString(slReal));
-   
-            Print(telegramMessage);
-   
-            sendTelegramMessage(telegramMessage, telegramChatID, telegramBotToken);  
+               sendTelegramMessage(telegramMessage, telegramChatID, telegramBotToken);
+            }
+ 
          } else {
             // Hay operacion abierta pero aun no hay señal de cierre, verificamos si ponemos BE
-            if(priceForBE > 0 && currentPrice >= priceForBE && alreadyInBreakEvenBuy == false) {
+            /*if(priceForBE > 0 && currentPrice >= priceForBE && alreadyInBreakEvenBuy == false) {
                trade.PositionModify(tradeTicketBuy, openPriceReal, tpPrice);
                alreadyInBreakEvenBuy = true;
-            }
+            }*/
          }
 
       } else if (signal_type == "sell" && close_trade == false){
 
          double currentPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
          
-         if(PositionSelectByTicket(tradeTicketSell) == false && isOpenPositionInDay == false){
+         /*if(PositionSelectByTicket(tradeTicketSell) == false && isOpenPositionInDay == false){
             // Abriremos compra porque no hay operacion abierta, llego señal y no hay orden de cerrar
             Print("ABRO VENTA. No hay operacion abierta, llego señal y no hay orden de cerrar");
             double lotSize = CalculateLotSize(_Symbol, amountToRiskSell, slPrice);
@@ -216,8 +217,8 @@ void getSignal() {
                trade.PositionModify(tradeTicketSell, openPriceReal, tpPrice);
                alreadyInBreakEvenBuy = true;
             }
-         }
-      } else if(close_trade == true) {
+         }*/
+      } /*else if(close_trade == true) {
          // Procedemos a cerrar la operacion que este abierta
          if(PositionSelectByTicket(tradeTicketBuy) == true){
             trade.PositionClose(tradeTicketBuy);
@@ -235,7 +236,7 @@ void getSignal() {
             sendTelegramMessage(telegramMessage, telegramChatID, telegramBotToken);
          }
          
-      }
+      }*/
    }
    return;
 }
@@ -312,23 +313,24 @@ int sendTelegramMessage(string text, string chatID, string botToken)
  //+------------------------------------------------------------------+
 //| Función para calcular el tamaño del lote                         |
 //+------------------------------------------------------------------+
-double CalculateLotSize(string symbol, double riskAmount, double slPips, double slPrice)
+double CalculateLotSize(string symbol, double riskAmount, double slPrice)
   {
-   double pipValue = SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_VALUE);
+      double pipValue = SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_VALUE);
    
-   double lotSize = 0.0;
-   if (slPrice > 0.0){
-     double symbol_bid = SymbolInfoDouble(symbol, SYMBOL_BID);
-     double pointSize = SymbolInfoDouble(symbol, SYMBOL_POINT);
-     lotSize = riskAmount / (MathAbs(symbol_bid - slPrice) / pointSize);
-   }
-   else if (slPips > 0.0)
-     lotSize = (riskAmount / (slPips * pipValue)) / 10;
+      double lotSize = 0.0;
+      double symbol_bid = SymbolInfoDouble(symbol, SYMBOL_BID);
+      double pointSize = SymbolInfoDouble(symbol, SYMBOL_POINT);
+      Print("slPrice: ", slPrice);
+      Print("symbol_bid: ", symbol_bid);
+      Print("pipValue: ", pipValue);
+      lotSize = riskAmount / (MathAbs(symbol_bid - slPrice) / pointSize);
+      Print("lotsize con slprice: ", lotSize);
+
    
-   // Devolver el tamaño del lote
-   int digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
-   
-   return NormalizeDouble(lotSize, 2);
+      // Devolver el tamaño del lote
+      int digits = SymbolInfoInteger(symbol, SYMBOL_DIGITS);
+      
+      return NormalizeDouble(lotSize, 2);
   }
   
 
