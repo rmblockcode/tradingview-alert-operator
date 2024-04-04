@@ -59,8 +59,10 @@ int OnInit()
    string telegramMessage = "";
    long accountNumber = AccountInfoInteger(ACCOUNT_LOGIN);
    Print("accountNumber: ", IntegerToString(accountNumber));
+   
+   string accountStr = IntegerToString(accountNumber);
 
-   userAccessValidated = botAccessValidation(IntegerToString(accountNumber));
+   userAccessValidated = botAccessValidation(accountStr);
    
    if (userAccessValidated == false){
       telegramMessage = "Bot NO habilitado para esta cuenta.";
@@ -69,7 +71,8 @@ int OnInit()
       return(INIT_FAILED);
    }
    
-   sendTelegramMessage("¡INICIO DE BOT SATISFACTORIO!", telegramChatID, telegramBotToken);
+   string message = StringFormat("¡INICIO DE BOT SATISFACTORIO EN CUENTA: %s!", accountStr);
+   sendTelegramMessage(message, telegramChatID, telegramBotToken);
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
