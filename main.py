@@ -303,6 +303,7 @@ async def get_tradingview_alert(user_code: str, account_number:str, db: Session 
             'sl_price': today_signal.sl_price,
             'tp_price': today_signal.tp_price,
             'price_for_be': today_signal.price_for_be,
+            'set_be': today_signal.set_be,
             'close_trade': today_signal.close_trade,
         }
     else:
