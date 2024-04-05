@@ -37,12 +37,12 @@ bool userAccessValidated = false; // Flag para indicar si el bot esta habilitado
 bool isOpenPositionInDay = false;
 ulong tradeTicketBuy = 0;
 ulong tradeTicketSell = 0;
-double amountToAddToSL = 0.75; // Cantidad a sumarle o restarle al SL para que pueda tomar el valor del de tradingview y no cerrar antes 
+double amountToAddToTPSL = 0.75; // Cantidad a sumarle o restarle al SL para que pueda tomar el valor del de tradingview y no cerrar antes 
 double priceForBE = 0;
 double openPriceReal = 0;
 bool alreadyInBreakEvenBuy = false; // Flag para indicar que ya se modifico a BreakEven para compras
 bool alreadyInBreakEvenSell = false; // Flag para indicar que ya se modifico a BreakEven para ventas 
-
+string accountStr = "";
 int decimalDigits = 2;
 
 //+------------------------------------------------------------------+
@@ -60,7 +60,7 @@ int OnInit()
    long accountNumber = AccountInfoInteger(ACCOUNT_LOGIN);
    Print("accountNumber: ", IntegerToString(accountNumber));
    
-   string accountStr = IntegerToString(accountNumber);
+   accountStr = IntegerToString(accountNumber);
 
    userAccessValidated = botAccessValidation(accountStr);
    
@@ -93,7 +93,7 @@ void OnDeinit(const int reason)
 void OnTick()
   {
 //---
-   //getSignal();
+
    datetime currentTime = TimeCurrent();
    MqlDateTime str;
    TimeToStruct(currentTime, str);
@@ -157,9 +157,10 @@ void getSignal()
             //double lotSize = CalculateLotSize(_Symbol, amountToRiskBuy, slPrice);
             double lotSize = NormalizeDouble(amountToRiskBuy / slPips, decimalDigits);
             
-            double newSL = slPrice - amountToAddToSL;
+            double newSL = slPrice - amountToAddToTPSL;
+            double newTP = tpPrice + amountToAddToTPSL;
    
-            trade.Buy(lotSize, _Symbol, currentPrice, newSL, tpPrice, "[BUY OPENED] XAUUSD Strategy London");
+            trade.Buy(lotSize, _Symbol, currentPrice, newSL, newTP, "[BUY OPENED] XAUUSD Strategy London");
             tradeTicketBuy = trade.ResultOrder();
             
             isOpenPositionInDay = true;
@@ -173,7 +174,8 @@ void getSignal()
             double tpReal = PositionGetDouble(POSITION_TP);
             
             string telegramMessage = StringFormat(
-                                 "[COMPRA ACTIVADA] Precio Apertura: %s",
+                                 "[COMPRA ACTIVADA EN CUENTA %s] Precio Apertura: %s",
+                                 accountStr,
                                  DoubleToString(openPriceReal));
    
             Print(telegramMessage);
@@ -184,7 +186,7 @@ void getSignal()
             if(set_be == true && alreadyInBreakEvenBuy == false) {
                trade.PositionModify(tradeTicketBuy, openPriceReal, tpPrice);
                alreadyInBreakEvenBuy = true;
-               string telegramMessage = "Movido SL a BreakEven";
+               string telegramMessage = StringFormat("Movido SL a BreakEven en cuenta %s", accountStr);
                sendTelegramMessage(telegramMessage, telegramChatID, telegramBotToken);
             }
          }
@@ -192,15 +194,18 @@ void getSignal()
       } else if (signal_type == "sell" && close_trade == false){
 
          double currentPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+         Print("PositionSelectByTicket(tradeTicketSell): ", PositionSelectByTicket(tradeTicketSell));
+         Print("isOpenPositionInDay: ", isOpenPositionInDay);
          
          if(PositionSelectByTicket(tradeTicketSell) == false && isOpenPositionInDay == false){
             // Abriremos compra porque no hay operacion abierta, llego señal y no hay orden de cerrar
             Print("ABRO VENTA. No hay operacion abierta, llego señal y no hay orden de cerrar");
             //double lotSize = CalculateLotSize(_Symbol, amountToRiskSell, slPrice);
             double lotSize = NormalizeDouble(amountToRiskSell / slPips, decimalDigits);
-            double newSL = slPrice - amountToAddToSL;
+            double newSL = slPrice + amountToAddToTPSL;
+            double newTP = tpPrice - amountToAddToTPSL;
             
-            trade.Sell(lotSize, _Symbol, currentPrice, newSL, tpPrice, "[SELL OPENED] XAUUSD Strategy London");
+            trade.Sell(lotSize, _Symbol, currentPrice, newSL, newTP, "[SELL OPENED] XAUUSD Strategy London");
             tradeTicketSell = trade.ResultOrder();
             
             isOpenPositionInDay = true;
@@ -214,7 +219,8 @@ void getSignal()
             }
             
             string telegramMessage = StringFormat(
-                                 "[VENTA ACTIVADA] Precio Apertura: %s",
+                                 "[VENTA ACTIVADA EN CUENTA %s] Precio Apertura: %s",
+                                 accountStr,
                                  DoubleToString(openPriceReal));
    
             Print(telegramMessage);
@@ -225,7 +231,7 @@ void getSignal()
             if(set_be == true && alreadyInBreakEvenSell == false) {
                trade.PositionModify(tradeTicketSell, openPriceReal, tpPrice);
                alreadyInBreakEvenBuy = true;
-               string telegramMessage = "Movido SL a BreakEven";
+               string telegramMessage = StringFormat("Movido SL a BreakEven en cuenta %s", accountStr);
                sendTelegramMessage(telegramMessage, telegramChatID, telegramBotToken);
             }
          }
