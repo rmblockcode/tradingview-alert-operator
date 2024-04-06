@@ -63,7 +63,7 @@ namespace cAlgo.Robots
             // Tu código de inicialización aquí
             Print($"Account number: {Account.Number}");
             Print("Es real: ", Account.IsLive);
-            SendTelegramMessage("INICIANDO TRADINGVIEW ALERT BOT EN CTRADER...");
+            SendTelegramMessage("INICIANDO BOT ESTRATEGIA ORO EN LONDRES EN CTRADER...");
 
             bool botAccessValidation = BotAccessValidation(Account.Number.ToString());
 
