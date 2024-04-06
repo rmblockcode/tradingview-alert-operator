@@ -358,7 +358,7 @@ namespace cAlgo.Robots
 
         private bool BotAccessValidation(string accountNumber)
         {
-            string url = $"{BotAccessUrl}/access-validation/{UserCode}/{accountNumber}/tradingview_alert_bot_enabled/";
+            string url = $"{BotAccessUrl}/access-validation/{UserCode}/{accountNumber}/xauusd_bot_london_enabled/";
 
             var response = Http.Get(url);
 
