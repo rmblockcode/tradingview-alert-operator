@@ -243,7 +243,7 @@ void getSignal() {
 
 bool botAccessValidation(string accountNumber)
   {
-   string remainUrl = StringFormat("access-validation/%s/%s/tradingview_alert_bot_enabled/", userCode, accountNumber);
+   string remainUrl = StringFormat("access-validation/%s/%s/xauusd_bot_london_enabled/", userCode, accountNumber);
 
    bool response = botAccessRequest(remainUrl);
 
