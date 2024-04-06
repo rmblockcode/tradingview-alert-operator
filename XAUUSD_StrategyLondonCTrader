@@ -8,12 +8,13 @@ using cAlgo.API.Indicators;
 using cAlgo.API.Internals;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-
+using System.Net;
+using System.IO;
 
 namespace cAlgo.Robots
 {
     [Robot(AccessRights = AccessRights.FullAccess)]
-    public class XAUUSD_StrategyLondonCtrader : Robot
+    public class XAUUSD_Test : Robot
     {
 
         [Parameter(DefaultValue = "Codigo de Usuario")]
@@ -37,11 +38,11 @@ namespace cAlgo.Robots
         [Parameter(DefaultValue = "Monto a Arriesgar para operaciones en Venta")]
         public double amountToRiskSell { get; set; }
 
-        // [Parameter(DefaultValue = "https://tradingbot-access.onrender.com", Group = "Configuración General (No Modificar)")]
-        // public string BotAccessUrl { get; set; }
+        //[Parameter(DefaultValue = "https://tradingbot-access.onrender.com", Group = "Configuración General (No Modificar)")]
+        //public string BotAccessUrl { get; set; }
 
-        // [Parameter(DefaultValue = "https://tradingview-alert-operator.onrender.com", Group = "Configuración General (No Modificar)")]
-        // public string SignalUrl { get; set; }
+        //[Parameter(DefaultValue = "https://tradingview-alert-operator.onrender.com", Group = "Configuración General (No Modificar)")]
+        //public string SignalUrl { get; set; }
 
 
         // API URLS
@@ -55,7 +56,7 @@ namespace cAlgo.Robots
         private TimeSpan startTime;
         private TimeSpan endTime;
         private double priceForBE = 0.0;
-        private double amountToAddToSL = 0.75;
+        private double amountToAddToTPSL = 0.75;
 
         protected override void OnStart()
         {
@@ -91,25 +92,15 @@ namespace cAlgo.Robots
             
             Print("Horario operativo ajustado a UTC: Inicio ", startTime, ", Fin ", endTime);
             
-            double volume = CalculateVolumeForXAUUSDWithPips(amountToRiskBuy, 150.0);
-            Print("VOLUME: ", volume);
+            //Print("amountToRiskBuy: ", amountToRiskBuy);
+            //double SLPips = 150.0;
+            //double volume = CalculateVolumeForXAUUSDWithPips(amountToRiskBuy, SLPips);
+            //Print("VOLUME: ", volume);
             
-            //var result = ExecuteMarketOrder(TradeType.Buy, SymbolName, 150, positionLabel, 150.0, 300.0);
-            // Obtiene los precios Ask y Bid actuales para el símbolo especificado
-            double askPrice = Symbol.Ask;
-            double bidPrice = Symbol.Bid;
+            //var result = ExecuteMarketOrder(TradeType.Sell, SymbolName, volume, positionLabel, SLPips, SLPips*3);
             
-            // Calcula el spread restando el Bid del Ask
-            double spread = askPrice - bidPrice;
-            
-            // Convierte el spread a pips. El factor de conversión depende del símbolo
-            // Para la mayoría de los pares de Forex, 1 pip = 0.0001, pero para pares con JPY es 0.01
-            // Aquí se asume un factor de conversión estándar (1 pip = 0.0001)
-            double spreadInPips = spread / Symbol.PipSize;
-            
-            Print("El spread actual para EURUSD es de ", spreadInPips, " pips.");
 
-            SendTelegramMessage("¡INICIO DE BOT SATISFACTORIO!");
+            SendTelegramMessage($"¡INICIO DE BOT SATISFACTORIO EN CUENTA {Account.Number}!");
             //GetSignal();
         }
 
@@ -133,7 +124,7 @@ namespace cAlgo.Robots
         protected override void OnStop()
         {
             // Handle cBot stop here
-            SendTelegramMessage($"Bot apagado en la cuenta {Account.Number.ToString()} en CTrader!");
+            SendTelegramMessage($"Bot apagado en la cuenta {Account.Number} en CTrader!");
         }
 
 
@@ -175,9 +166,10 @@ namespace cAlgo.Robots
                         {
                             // Obtiene el precio de entrada actual como el precio Ask para una operación de compra
                             double entryPrice = Symbols.GetSymbol(SymbolName).Ask;
-                            double newSL = slPrice - amountToAddToSL;
+                            double newSL = slPrice - amountToAddToTPSL;
+                            double newTP = tpPrice + amountToAddToTPSL;
                             double newSLPips = Math.Abs(entryPrice - newSL) / Symbol.PipSize; // Se pone newSL para ampliarlo en la operacion y evitar que se cierre antes de la alerta de Tradingview
-                            double tpPips = Math.Abs(entryPrice - tpPrice) / Symbol.PipSize;
+                            double tpPips = Math.Abs(entryPrice - newTP) / Symbol.PipSize;
 
                             // Calcula el volumen necesario basado en el precio específico de SL
                             //double volume = CalculateVolumeForXAUUSDWithPrice(amountToRiskBuy, entryPrice, slPrice, pipValue);
@@ -194,7 +186,7 @@ namespace cAlgo.Robots
                                 double positionEntryPrice = result.Position.EntryPrice;
                                 double positionTakeProfit = result.Position.TakeProfit ?? 0.0;
                                 double positionStopLoss = result.Position.StopLoss ?? 0.0;
-                                string telegramMessage = $@"[COMPRA] Precio Apertura: {positionEntryPrice}; PositionId: {openedPositionId}";
+                                string telegramMessage = $@"[COMPRA CTRADER EN CUENTA {Account.Number}] Precio Apertura: {positionEntryPrice}; PositionId: {openedPositionId}";
                                 SendTelegramMessage(telegramMessage);
                             }
                             else 
@@ -229,9 +221,10 @@ namespace cAlgo.Robots
                         {
                             // Obtiene el precio de entrada actual como el precio Bid para una operación de venta
                             double entryPrice = Symbols.GetSymbol(SymbolName).Bid;
-                            double newSL = slPrice - amountToAddToSL;
+                            double newSL = slPrice + amountToAddToTPSL;
+                            double newTP = tpPrice - amountToAddToTPSL;
                             double newSLPips = Math.Abs(entryPrice - newSL) / Symbol.PipSize;
-                            double tpPips = Math.Abs(entryPrice - tpPrice) / Symbol.PipSize;
+                            double tpPips = Math.Abs(entryPrice - newTP) / Symbol.PipSize;
 
                             // Calcula el volumen necesario basado en el precio específico de SL
                             //double volume = CalculateVolumeForXAUUSDWithPrice(amountToRiskSell, entryPrice, slPrice, pipValue);
@@ -311,7 +304,7 @@ namespace cAlgo.Robots
             double truncated = Math.Truncate(scaled);
             
             // Re-escala el número de vuelta a su tamaño original
-            return truncated / 100;
+            return truncated;
         }
 
         public double CalculateVolumeForXAUUSDWithPrice(double riskAmount, double entryPrice, double slPrice, double pipValue)
@@ -331,17 +324,36 @@ namespace cAlgo.Robots
 
         private void SendTelegramMessage(string message)
         {
-
-            string url = $"https://api.telegram.org/bot{TelegramBotToken}/sendMessage?chat_id={TelegramChatID}&text={message}";
-
-            var uri = new Uri(url);
-            
-            var postRequest = new HttpRequest(uri);
-
-            postRequest.Method = HttpMethod.Post;
-
-            var response = Http.Send(postRequest);
-
+            try
+            {
+                var url = $"https://api.telegram.org/bot{TelegramBotToken}/sendMessage";
+                
+                // Crea el objeto de solicitud
+                var request = WebRequest.Create(url);
+                request.Method = "POST";
+                request.ContentType = "application/json";
+        
+                // Crea el cuerpo del mensaje
+                string postData = "{\"chat_id\":\"" + TelegramChatID + "\", \"text\":\"" + message + "\"}";
+                
+                // Envía el cuerpo del mensaje
+                using (var streamWriter = new StreamWriter(request.GetRequestStream()))
+                {
+                    streamWriter.Write(postData);
+                }
+                
+                // Recibe la respuesta
+                var response = (HttpWebResponse)request.GetResponse();
+                using (var streamReader = new StreamReader(response.GetResponseStream()))
+                {
+                    var result = streamReader.ReadToEnd();
+                    Print("Respuesta de Telegram: ", result);
+                }
+            }
+            catch (Exception e)
+            {
+                Print("Error al enviar mensaje a Telegram: ", e.Message);
+            }
         }
 
         private bool BotAccessValidation(string accountNumber)
