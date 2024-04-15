@@ -293,14 +293,17 @@ async def get_tradingview_alert(user_code: str, account_number:str, db: Session 
     if today_signal:
         limit_time = today_signal.open_timestamp + timedelta(minutes=delay_minutes)
         limit_time = limit_time.replace(tzinfo=None)
+
+        detail = True
+
         if datetime.now()  > limit_time and not today_signal.close_trade and not today_signal.set_be:
             print(
             f'Ya han pasado {delay_minutes} minutes '
             f'después de la señal. Cliente: {user_code}')
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=False)
+            detail = False
 
         return {
-            'detail': True,
+            'detail': detail,
             'signal_type': today_signal.signal_type,
             'sl_price': today_signal.sl_price,
             'sl_pips': today_signal.sl_pips,
