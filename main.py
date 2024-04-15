@@ -296,7 +296,7 @@ async def get_tradingview_alert(user_code: str, account_number:str, db: Session 
 
         detail = True
 
-        if datetime.now()  > limit_time and not today_signal.close_trade and not today_signal.set_be:
+        if datetime.now()  > limit_time:
             print(
             f'Ya han pasado {delay_minutes} minutes '
             f'después de la señal. Cliente: {user_code}')
