@@ -67,6 +67,41 @@ async def health_checker():
     return {"message": "Server Running..."}
 
 
+@app.get("/access-validation/{user_code}/{account_number}/{bot_access}/{is_real}")
+async def user_access_validation(user_code: str, account_number: str, bot_access: str, is_real: str):
+    if bot_access not in ['xauusd_bot_ny_enabled', 'xauusd_bot_london_enabled', 'tradingview_alert_bot_enabled']:
+        return {"result": False}
+
+    is_real_account = True if is_real == "Real" else False
+
+    db = SessionLocal()
+    try:
+        user_access_account = db.query(UserAccessAccount).join(UserAccess).filter(
+            UserAccess.user_code == user_code,
+            UserAccessAccount.account_number == account_number,
+            UserAccessAccount.is_real == is_real_account,
+            UserAccess.status.has(status="active"),
+            UserAccessAccount.status.has(status="active")
+        ).one_or_none()
+
+        if not user_access_account:
+            return {"result": False}
+
+        if bot_access == 'xauusd_bot_ny_enabled' and not user_access_account.user_access.xauusd_bot_ny_enabled:
+            return {"result": False}
+        
+        if bot_access == 'xauusd_bot_london_enabled' and not user_access_account.user_access.xauusd_bot_london_enabled:
+            return {"result": False}
+        
+        if bot_access == 'tradingview_alert_bot_enabled' and not user_access_account.user_access.tradingview_alert_bot_enabled:
+            return {"result": False}
+        
+        return {"result": True}
+
+    finally:
+        db.close()
+
+
 @app.get("/tradingview-alert/signal/{user_code}/{account_number}/")
 async def get_tradingview_alert(user_code: str, account_number:str, db: Session = Depends(get_db)):
     alert = db.query(TradingviewAlertSignal).filter(
