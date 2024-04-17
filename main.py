@@ -30,6 +30,7 @@ class SignalType(str, Enum):
 class Trades(BaseModel):
     signal_type: str
     account_number: int
+    symbol: str
     amount_to_risk: float
     sl_pips: float | None = None
     sl_price: float | None = None
@@ -39,7 +40,6 @@ class Trades(BaseModel):
 
 class TradingviewAlertRequest(BaseModel):
     user_code: str
-    symbol: str
     trades: List[Trades]
 
 
@@ -131,7 +131,6 @@ async def get_tradingview_alert(user_code: str, account_number:str, db: Session 
 async def create_tradingview_alert(alert_data: TradingviewAlertRequest, db: Session = Depends(get_db)):
     
     user_code = alert_data.user_code
-    symbol = alert_data.symbol
     trades = alert_data.trades
 
     user_access = db.query(UserAccess).filter(UserAccess.user_code == user_code).first()
@@ -145,6 +144,7 @@ async def create_tradingview_alert(alert_data: TradingviewAlertRequest, db: Sess
     for trade in trades:
         signal_type = trade.signal_type
         account_number = trade.account_number
+        symbol = trade.symbol
         amount_to_risk = trade.amount_to_risk
         sl_pips = trade.sl_pips
         sl_price = trade.sl_price
