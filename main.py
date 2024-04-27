@@ -180,7 +180,8 @@ async def create_tradingview_alert(alert_data: TradingviewAlertRequest, db: Sess
 
         alert = db.query(TradingviewAlertSignal).filter(
             TradingviewAlertSignal.user_access.has(user_code=user_code),
-            TradingviewAlertSignal.account_number == account_number
+            TradingviewAlertSignal.account_number == account_number,
+            TradingviewAlertSignal.symbol == symbol
         ).first()
 
         if alert:
