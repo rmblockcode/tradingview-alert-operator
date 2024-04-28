@@ -85,3 +85,17 @@ class TradingviewAlertGoldLondonSignal(Base):
     close_trade = Column(Boolean, default=False)
     open_timestamp = Column(DateTime)
     close_timestamp = Column(DateTime, nullable=True)
+
+
+class NewsEvents(Base):
+    __tablename__ = 'news_events_newsevents'
+
+    id = Column(Integer, primary_key=True)
+    created_at = Column(DateTime, nullable=False, default=func.now())
+    updated_at = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now())
+    title = Column(String(255))
+    country = Column(String(3))
+    date = Column(DateTime)
+    impact = Column(String(10))
+    forecast = Column(String(50))
+    previous = Column(String(50))

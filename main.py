@@ -1,4 +1,5 @@
 import os
+import requests
 from fastapi import FastAPI, HTTPException, Depends, status
 from pydantic import BaseModel, Field
 from typing import List
@@ -7,7 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from models import (
     TradingviewAlertSignal, Status, UserAccess, UserAccessAccount,
-    TradingviewAlertGoldLondonSignal)
+    TradingviewAlertGoldLondonSignal, NewsEvents)
 from database import SessionLocal
 from datetime import datetime, date, timedelta
 
@@ -67,7 +68,7 @@ async def health_checker():
     return {"message": "Server Running..."}
 
 
-@app.get("/access-validation/{user_code}/{account_number}/{bot_access}/{is_real}")
+@app.get("/access-validation/{user_code}/{account_number}/{bot_access}/{is_real}/")
 async def user_access_validation(user_code: str, account_number: str, bot_access: str, is_real: str):
     if bot_access not in ['xauusd_bot_ny_enabled', 'xauusd_bot_london_enabled', 'tradingview_alert_bot_enabled']:
         return {"result": False}
@@ -352,3 +353,57 @@ async def get_tradingview_alert(user_code: str, account_number:str, db: Session 
         print(
             f'No hay operación en el día')
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=False)
+
+
+@app.post("/store_news_events")
+async def store_news_events(db: Session = Depends(get_db)):
+    # Consulta la URL para obtener los eventos
+    url = os.environ.get('NEWS_EVENTS_URL')
+    response = requests.get(url)
+    events = response.json()
+
+    countries_news = os.environ.get('COUNTRIES_NEWS').split(',')
+    impact_news = os.environ.get('IMPACT_NEWS').split(',')
+
+    # Almacena los eventos con impacto "High" en la base de datos
+    for event in events:
+        if event.get('country') in countries_news and event.get("impact") in impact_news:
+            title = event.get('title')
+            # Verifica si ya existe una noticia con el mismo título
+            existing_news = db.query(NewsEvents).filter_by(title=title).first()
+            if existing_news:
+                continue  # Si la noticia ya existe, pasa a la siguiente
+            country = event.get('country')
+            date = datetime.fromisoformat(event.get('date').replace('Z', '+00:00'))
+            impact = event.get('impact')
+            forecast = event.get('forecast')
+            previous = event.get('previous')
+
+            from pprint import pprint
+            pprint(event)
+
+            new_event = NewsEvents(
+                title=title,
+                country=country,
+                date=date,
+                impact=impact,
+                forecast=forecast,
+                previous=previous
+            )
+            db.add(new_event)
+
+        db.commit()
+
+    return {'message': 'Events stored successfully'}
+
+@app.get("/news/{date}")
+def get_news_by_date(date: str, db: Session = Depends(get_db)):
+    # Realiza la consulta a la base de datos
+    news = db.query(NewsEvents).filter(func.date(NewsEvents.date) == date).all()
+
+    # Si no se encontraron noticias para la fecha especificada, devuelve un error 404
+    if not news:
+        raise HTTPException(status_code=404, detail="No se encontraron noticias para la fecha especificada")
+
+    # Devuelve las noticias encontradas
+    return news
