@@ -5,7 +5,7 @@ import os
 
 SQLALCHEMY_DATABASE_URL = os.environ['DATABASE_URL']
 
-engine = create_engine(SQLALCHEMY_DATABASE_URL, pool_size=10, max_overflow=20)
+engine = create_engine(SQLALCHEMY_DATABASE_URL, pool_size=70, max_overflow=100)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()

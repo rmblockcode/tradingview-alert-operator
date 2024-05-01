@@ -2,8 +2,9 @@ import os
 import requests
 from fastapi import FastAPI, HTTPException, Depends, status
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 from enum import Enum
+from cachetools import cached, TTLCache
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from models import (
@@ -14,6 +15,9 @@ from datetime import datetime, date, timedelta
 
 
 app = FastAPI()
+
+cache = TTLCache(maxsize=1000, ttl=600) # 5horas
+KEY_CACHE_LONDON = 'london-trade'
 
 def get_db():
     db = SessionLocal()
@@ -33,10 +37,10 @@ class Trades(BaseModel):
     account_number: int
     symbol: str
     amount_to_risk: float
-    sl_pips: float | None = None
-    sl_price: float | None = None
-    tp_pips: float | None = None
-    tp_price: float | None = None
+    sl_pips: Optional[float] = None
+    sl_price: Optional[float] = None
+    tp_pips: Optional[float] = None
+    tp_price: Optional[float] = None
 
 
 class TradingviewAlertRequest(BaseModel):
@@ -243,7 +247,7 @@ async def create_tradingview_alert_gold_london(
         price_for_be = prices[2]
         sl_pips = float(prices[3]) / 10
 
-        new_signal = TradingviewAlertGoldLondonSignal(
+        data = dict(
             signal_type=signal_type,
             sl_price=sl_price,
             sl_pips=sl_pips,
@@ -251,9 +255,16 @@ async def create_tradingview_alert_gold_london(
             price_for_be=price_for_be,
             open_timestamp=timestamp,
             close_timestamp=None,
+            set_be=False,
+            close_trade=False,
             created_at=func.now(),
             updated_at=func.now()
         )
+
+        new_signal = TradingviewAlertGoldLondonSignal(**data)
+
+        cache[KEY_CACHE_LONDON] = data
+
         db.add(new_signal)
         db.commit()
 
@@ -263,6 +274,9 @@ async def create_tradingview_alert_gold_london(
         today_signal.close_trade = True
         db.commit()
 
+        # Updating cache data
+        store_signal_to_cache(today_signal)
+
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -270,6 +284,25 @@ async def create_tradingview_alert_gold_london(
         )
 
     return {'message': 'Datos almacenados exitosamente'}
+
+
+def store_signal_to_cache(today_signal: TradingviewAlertGoldLondonSignal):
+    """
+    Store a signal in the cache dictionary
+    """
+    today_signal = {
+        'signal_type': today_signal.signal_type,
+        'sl_price': today_signal.sl_price,
+        'sl_pips': today_signal.sl_pips,
+        'tp_price': today_signal.tp_price,
+        'price_for_be': today_signal.price_for_be,
+        'set_be': today_signal.set_be,
+        'close_trade': today_signal.close_trade,
+        'open_timestamp': today_signal.open_timestamp
+    }
+
+    cache[KEY_CACHE_LONDON] = today_signal
+
 
 @app.post("/tradingview-alert-gold-london/signal/set-be/")
 async def set_be_tradingview_alert_gold_london(
@@ -292,6 +325,9 @@ async def set_be_tradingview_alert_gold_london(
         today_signal.set_be = True
         db.commit()
 
+        # Updating cache data
+        store_signal_to_cache(today_signal)
+
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -305,30 +341,47 @@ async def set_be_tradingview_alert_gold_london(
 async def get_tradingview_alert(user_code: str, account_number:str, db: Session = Depends(get_db)):
 
     # Validate user exists and is active
-    user_validation = db.query(UserAccessAccount).\
-        join(UserAccess).\
-        join(Status).\
-        filter(UserAccess.user_code == user_code).\
-        filter(Status.status == 'active').\
-        filter(UserAccess.xauusd_bot_london_enabled == True).\
-        filter(UserAccessAccount.account_number == account_number).\
-        filter(UserAccessAccount.status_id == Status.id).\
-        first()
+    # user_validation = db.query(UserAccessAccount).\
+    #     join(UserAccess).\
+    #     join(Status).\
+    #     filter(UserAccess.user_code == user_code).\
+    #     filter(Status.status == 'active').\
+    #     filter(UserAccess.xauusd_bot_london_enabled == True).\
+    #     filter(UserAccessAccount.account_number == account_number).\
+    #     filter(UserAccessAccount.status_id == Status.id).\
+    #     first()
     
-    if not user_validation:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Usuario o no existe, o no le pertenece esta cuenta o no está activo")
+    # if not user_validation:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_400_BAD_REQUEST,
+    #         detail="Usuario o no existe, o no le pertenece esta cuenta o no está activo")
     
     today = date.today()
     delay_minutes = int(os.environ.get('DELAY_MINUTES'))
 
-    today_signal = db.query(TradingviewAlertGoldLondonSignal).filter(
-        func.date(TradingviewAlertGoldLondonSignal.created_at) == today
-    ).first()
+    today_signal = cache.get(KEY_CACHE_LONDON)
+
+    if not today_signal:
+        # Try looking into the database
+        today_signal = db.query(TradingviewAlertGoldLondonSignal).filter(
+            func.date(TradingviewAlertGoldLondonSignal.created_at) == today
+        ).first()
+
+        store_signal_to_cache(today_signal)
+
+        today_signal = {
+            'signal_type': today_signal.signal_type,
+            'sl_price': today_signal.sl_price,
+            'sl_pips': today_signal.sl_pips,
+            'tp_price': today_signal.tp_price,
+            'price_for_be': today_signal.price_for_be,
+            'set_be': today_signal.set_be,
+            'close_trade': today_signal.close_trade,
+            'open_timestamp': today_signal.open_timestamp
+        }
 
     if today_signal:
-        limit_time = today_signal.open_timestamp + timedelta(minutes=delay_minutes)
+        limit_time = today_signal.get('open_timestamp') + timedelta(minutes=delay_minutes)
         limit_time = limit_time.replace(tzinfo=None)
 
         detail = True
@@ -339,16 +392,7 @@ async def get_tradingview_alert(user_code: str, account_number:str, db: Session 
             f'después de la señal. Cliente: {user_code}')
             detail = False
 
-        return {
-            'detail': detail,
-            'signal_type': today_signal.signal_type,
-            'sl_price': today_signal.sl_price,
-            'sl_pips': today_signal.sl_pips,
-            'tp_price': today_signal.tp_price,
-            'price_for_be': today_signal.price_for_be,
-            'set_be': today_signal.set_be,
-            'close_trade': today_signal.close_trade,
-        }
+        return {'detail': detail, **today_signal}
     else:
         print(
             f'No hay operación en el día')
