@@ -367,6 +367,11 @@ async def get_tradingview_alert(user_code: str, account_number:str, db: Session 
             func.date(TradingviewAlertGoldLondonSignal.created_at) == today
         ).first()
 
+        if not today_signal:
+            print(
+                f'No hay operación en el día')
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=False)
+
         store_signal_to_cache(today_signal)
 
         today_signal = {
@@ -380,23 +385,18 @@ async def get_tradingview_alert(user_code: str, account_number:str, db: Session 
             'open_timestamp': today_signal.open_timestamp
         }
 
-    if today_signal:
-        limit_time = today_signal.get('open_timestamp') + timedelta(minutes=delay_minutes)
-        limit_time = limit_time.replace(tzinfo=None)
+    limit_time = today_signal.get('open_timestamp') + timedelta(minutes=delay_minutes)
+    limit_time = limit_time.replace(tzinfo=None)
 
-        detail = True
+    detail = True
 
-        if datetime.now()  > limit_time:
-            print(
-            f'Ya han pasado {delay_minutes} minutes '
-            f'después de la señal. Cliente: {user_code}')
-            detail = False
-
-        return {'detail': detail, **today_signal}
-    else:
+    if datetime.now()  > limit_time:
         print(
-            f'No hay operación en el día')
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=False)
+        f'Ya han pasado {delay_minutes} minutes '
+        f'después de la señal. Cliente: {user_code}')
+        detail = False
+
+    return {'detail': detail, **today_signal}
 
 
 @app.post("/store_news_events")
