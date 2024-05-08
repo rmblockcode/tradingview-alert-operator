@@ -1,4 +1,5 @@
 import os
+import pytz
 import requests
 from fastapi import FastAPI, HTTPException, Depends, status
 from pydantic import BaseModel, Field
@@ -399,7 +400,7 @@ async def get_tradingview_alert(user_code: str, account_number:str, db: Session 
     return {'detail': detail, **today_signal}
 
 
-@app.post("/store_news_events")
+@app.post("/store_news_events/")
 async def store_news_events(db: Session = Depends(get_db)):
     # Consulta la URL para obtener los eventos
     url = os.environ.get('NEWS_EVENTS_URL')
@@ -440,14 +441,24 @@ async def store_news_events(db: Session = Depends(get_db)):
 
     return {'message': 'Events stored successfully'}
 
-@app.get("/news/{date}")
-def get_news_by_date(date: str, db: Session = Depends(get_db)):
-    # Realiza la consulta a la base de datos
-    news = db.query(NewsEvents).filter(func.date(NewsEvents.date) == date).all()
+
+@app.get("/today-news/")
+def get_today_news(db: Session = Depends(get_db)):
+    """
+        Obtiene las noticias del día actual. La fecha es transformada para que solo
+        envie la hora de la noticia
+    """
+    ny_timezone = pytz.timezone("America/New_York")
+    today = datetime.now(ny_timezone).date()
+
+    news = db.query(NewsEvents).filter(func.date(NewsEvents.date) == today+timedelta(days=1)).all()
 
     # Si no se encontraron noticias para la fecha especificada, devuelve un error 404
     if not news:
-        raise HTTPException(status_code=404, detail="No se encontraron noticias para la fecha especificada")
+        raise HTTPException(status_code=400, detail=False)
+    
+    for item in news:
+        item.date = item.date.astimezone(ny_timezone).strftime("%H:%M:%S")
 
     # Devuelve las noticias encontradas
     return news
