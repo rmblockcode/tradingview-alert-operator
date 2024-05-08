@@ -455,10 +455,10 @@ def get_today_news(db: Session = Depends(get_db)):
 
     # Si no se encontraron noticias para la fecha especificada, devuelve un error 404
     if not news:
-        raise HTTPException(status_code=400, detail=False)
+        return {'result': False, 'news': []}
     
     for item in news:
         item.date = item.date.astimezone(ny_timezone).strftime("%H:%M:%S")
 
     # Devuelve las noticias encontradas
-    return news
+    return {'result': True, 'news': news}
