@@ -451,7 +451,7 @@ def get_today_news(db: Session = Depends(get_db)):
     ny_timezone = pytz.timezone("America/New_York")
     today = datetime.now(ny_timezone).date()
 
-    news = db.query(NewsEvents).filter(func.date(NewsEvents.date) == today+timedelta(days=1)).all()
+    news = db.query(NewsEvents).filter(func.date(NewsEvents.date) == today).all()
 
     # Si no se encontraron noticias para la fecha especificada, devuelve un error 404
     if not news:
