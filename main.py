@@ -340,7 +340,7 @@ async def set_be_tradingview_alert_gold_london(
 
 
 @app.get("/tradingview-alert-gold-london/signal/{user_code}/{account_number}/")
-async def get_tradingview_alert(user_code: str, account_number:str, db: Session = Depends(get_db)):
+async def get_tradingview_alert_gold_london(user_code: str, account_number:str, db: Session = Depends(get_db)):
 
     # Validate user exists and is active
     # user_validation = db.query(UserAccessAccount).\
@@ -362,6 +362,14 @@ async def get_tradingview_alert(user_code: str, account_number:str, db: Session 
     delay_minutes = int(os.environ.get('DELAY_MINUTES'))
 
     today_signal = cache.get(KEY_CACHE_LONDON)
+
+    otra_cosa = cache.get('OTRA_KEY')
+
+    if not otra_cosa:
+        cache['OTRA_KEY'] = {
+            "value": "Otra cosa", 
+            "expire": datetime.now
+        }
 
     if not today_signal:
         # Try looking into the database
