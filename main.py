@@ -451,18 +451,14 @@ def get_today_news(db: Session = Depends(get_db)):
     """
     ny_timezone = pytz.timezone("America/New_York")
     today = datetime.now(ny_timezone).date()
-    
+
     key_cache = f'{KEY_CACHE_TODAY_NEWS}-{today}'
 
     today_news = cache.get(key_cache)
 
     if today_news:
-        print('DESDE EL CACHE')
-        print(key_cache)
         return today_news
 
-    print('NO DESDE EL CACHE')
-    print(key_cache)
     news = db.query(NewsEvents).filter(
         NewsEvents.country == 'USD',
         func.date(NewsEvents.date) == today).all()
