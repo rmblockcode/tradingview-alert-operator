@@ -449,7 +449,9 @@ def get_today_news(db: Session = Depends(get_db)):
         Obtiene las noticias del día actual. La fecha es transformada para que solo
         envie la hora de la noticia
     """
+    ny_timezone = pytz.timezone("America/New_York")
     today = datetime.now(ny_timezone).date()
+    
     key_cache = f'{KEY_CACHE_TODAY_NEWS}-{today}'
 
     today_news = cache.get(key_cache)
@@ -458,9 +460,6 @@ def get_today_news(db: Session = Depends(get_db)):
         print('DESDE EL CACHE')
         print(key_cache)
         return today_news
-    
-    ny_timezone = pytz.timezone("America/New_York")
-    today = datetime.now(ny_timezone).date()
 
     print('NO DESDE EL CACHE')
     print(key_cache)
