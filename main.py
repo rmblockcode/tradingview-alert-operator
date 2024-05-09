@@ -449,32 +449,35 @@ def get_today_news(db: Session = Depends(get_db)):
         Obtiene las noticias del día actual. La fecha es transformada para que solo
         envie la hora de la noticia
     """
+    today = datetime.now(ny_timezone).date()
+    key_cache = f'{KEY_CACHE_TODAY_NEWS}-{today}'
 
-    today_news = cache.get(KEY_CACHE_TODAY_NEWS)
+    today_news = cache.get(key_cache)
 
     if today_news:
-        print("DESDE EL CACHE")
+        print('DESDE EL CACHE')
+        print(key_cache)
         return today_news
     
     ny_timezone = pytz.timezone("America/New_York")
     today = datetime.now(ny_timezone).date()
 
-
+    print('NO DESDE EL CACHE')
+    print(key_cache)
     news = db.query(NewsEvents).filter(
         NewsEvents.country == 'USD',
-        func.date(NewsEvents.date) == today+timedelta(days=1)).all()
+        func.date(NewsEvents.date) == today).all()
 
     # Si no se encontraron noticias para la fecha especificada, devuelve un error 404
-    print("NO desde el cache")
     if not news:
         response = {'result': False, 'news': []}
-        cache[KEY_CACHE_TODAY_NEWS] = response
+        cache[key_cache] = response
         return response
     
     for item in news:
         item.date = item.date.astimezone(ny_timezone).strftime("%H:%M:%S")
 
     response = {'result': True, 'news': news}
-    cache[KEY_CACHE_TODAY_NEWS] = response
+    cache[key_cache] = response
     # Devuelve las noticias encontradas
     return response
