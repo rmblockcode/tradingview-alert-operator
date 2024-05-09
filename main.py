@@ -19,6 +19,7 @@ app = FastAPI()
 
 cache = TTLCache(maxsize=1000, ttl=600) # 5horas
 KEY_CACHE_LONDON = 'london-trade'
+KEY_CACHE_TODAY_NEWS = 'today-news'
 
 def get_db():
     db = SessionLocal()
@@ -448,17 +449,32 @@ def get_today_news(db: Session = Depends(get_db)):
         Obtiene las noticias del día actual. La fecha es transformada para que solo
         envie la hora de la noticia
     """
+
+    today_news = cache.get(KEY_CACHE_TODAY_NEWS)
+
+    if today_news:
+        print("DESDE EL CACHE")
+        return today_news
+    
     ny_timezone = pytz.timezone("America/New_York")
     today = datetime.now(ny_timezone).date()
 
-    news = db.query(NewsEvents).filter(func.date(NewsEvents.date) == today+timedelta(days=1)).all()
+
+    news = db.query(NewsEvents).filter(
+        NewsEvents.country == 'USD',
+        func.date(NewsEvents.date) == today+timedelta(days=1)).all()
 
     # Si no se encontraron noticias para la fecha especificada, devuelve un error 404
+    print("NO desde el cache")
     if not news:
-        return {'result': False, 'news': []}
+        response = {'result': False, 'news': []}
+        cache[KEY_CACHE_TODAY_NEWS] = response
+        return response
     
     for item in news:
         item.date = item.date.astimezone(ny_timezone).strftime("%H:%M:%S")
 
+    response = {'result': True, 'news': news}
+    cache[KEY_CACHE_TODAY_NEWS] = response
     # Devuelve las noticias encontradas
-    return {'result': True, 'news': news}
+    return response
