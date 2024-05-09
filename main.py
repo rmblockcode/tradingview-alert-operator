@@ -366,10 +366,13 @@ async def get_tradingview_alert_gold_london(user_code: str, account_number:str, 
     otra_cosa = cache.get('OTRA_KEY')
 
     if not otra_cosa:
+        print('ENTRANDO CACHE')
         cache['OTRA_KEY'] = {
             "value": "Otra cosa", 
             "expire": datetime.now
         }
+    else:
+        print('EN CACHE')
 
     if not today_signal:
         # Try looking into the database
