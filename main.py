@@ -268,7 +268,7 @@ async def create_tradingview_alert_gold_london(
         db.add(new_signal)
         db.commit()
 
-        store_signal_to_cache(new_signal)
+        # store_signal_to_cache(new_signal)
 
     elif open_position.startswith("Exit") and today_signal:
         # An position was open and now will be closed
@@ -277,7 +277,7 @@ async def create_tradingview_alert_gold_london(
         db.commit()
 
         # Updating cache data
-        store_signal_to_cache(today_signal)
+        # store_signal_to_cache(today_signal)
 
     else:
         raise HTTPException(
@@ -328,7 +328,7 @@ async def set_be_tradingview_alert_gold_london(
         db.commit()
 
         # Updating cache data
-        store_signal_to_cache(today_signal)
+        # store_signal_to_cache(today_signal)
 
     else:
         raise HTTPException(
@@ -361,35 +361,31 @@ async def get_tradingview_alert_gold_london(user_code: str, account_number:str, 
     today = date.today()
     delay_minutes = int(os.environ.get('DELAY_MINUTES'))
 
-    today_signal = cache.get(KEY_CACHE_LONDON)
+    # today_signal = cache.get(KEY_CACHE_LONDON)
+
+    # if not today_signal:
+        # Try looking into the database
+    today_signal = db.query(TradingviewAlertGoldLondonSignal).filter(
+        func.date(TradingviewAlertGoldLondonSignal.created_at) == today
+    ).first()
 
     if not today_signal:
-        print('SIN CACHE')
-        # Try looking into the database
-        today_signal = db.query(TradingviewAlertGoldLondonSignal).filter(
-            func.date(TradingviewAlertGoldLondonSignal.created_at) == today
-        ).first()
+        print(
+            f'No hay operación en el día')
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=False)
 
-        if not today_signal:
-            print(
-                f'No hay operación en el día')
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=False)
+    store_signal_to_cache(today_signal)
 
-        store_signal_to_cache(today_signal)
-
-        today_signal = {
-            'signal_type': today_signal.signal_type,
-            'sl_price': today_signal.sl_price,
-            'sl_pips': today_signal.sl_pips,
-            'tp_price': today_signal.tp_price,
-            'price_for_be': today_signal.price_for_be,
-            'set_be': today_signal.set_be,
-            'close_trade': today_signal.close_trade,
-            'open_timestamp': today_signal.open_timestamp
-        }
-    else:
-        print('CON CACHE')
-        print(today_signal)
+    today_signal = {
+        'signal_type': today_signal.signal_type,
+        'sl_price': today_signal.sl_price,
+        'sl_pips': today_signal.sl_pips,
+        'tp_price': today_signal.tp_price,
+        'price_for_be': today_signal.price_for_be,
+        'set_be': today_signal.set_be,
+        'close_trade': today_signal.close_trade,
+        'open_timestamp': today_signal.open_timestamp
+    }
 
     limit_time = today_signal.get('open_timestamp') + timedelta(minutes=delay_minutes)
     limit_time = limit_time.replace(tzinfo=None)
