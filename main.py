@@ -374,7 +374,7 @@ async def get_tradingview_alert_gold_london(user_code: str, account_number:str, 
             f'No hay operación en el día')
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=False)
 
-    store_signal_to_cache(today_signal)
+    # store_signal_to_cache(today_signal)
 
     today_signal = {
         'signal_type': today_signal.signal_type,
