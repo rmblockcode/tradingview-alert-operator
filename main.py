@@ -415,12 +415,14 @@ async def store_news_events(db: Session = Depends(get_db)):
     for event in events:
         if event.get('country') in countries_news and event.get("impact") in impact_news:
             title = event.get('title')
+            date = datetime.fromisoformat(event.get('date').replace('Z', '+00:00'))
             # Verifica si ya existe una noticia con el mismo título
-            existing_news = db.query(NewsEvents).filter_by(title=title).first()
+            existing_news = db.query(NewsEvents).filter_by(
+                title=title,
+                date=date).first()
             if existing_news:
                 continue  # Si la noticia ya existe, pasa a la siguiente
             country = event.get('country')
-            date = datetime.fromisoformat(event.get('date').replace('Z', '+00:00'))
             impact = event.get('impact')
             forecast = event.get('forecast')
             previous = event.get('previous')
