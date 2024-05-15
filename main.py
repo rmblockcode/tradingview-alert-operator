@@ -323,6 +323,24 @@ async def set_be_tradingview_alert_gold_london(
     ).first()
 
     if open_position.startswith("BE-Exit") and today_signal:
+
+        close_price = float(prices)
+        close_price = close_price // 1
+        sl_price = today_signal.sl_pips // 1
+        price_for_be = today_signal.price_for_be // 1
+
+        # Vemos si esta cerrando una compra en SL
+        # Para el caso de compras, si el precio de la alerta es menor o igual al precio de sl
+        # o si el precio es menor al precio de BE entonces es porque es un SL
+        if open_position == 'BE-Exit Long' and (close_price <= sl_price or close_price < price_for_be):
+            return {'message': 'Compra cerrada en SL'}
+
+        # Vemos si esta cerrando una venta en SL
+        # Para el caso de ventas, si el precio de la alerta es maor o igual al precio de sl
+        # o si el precio es mayor al precio de BE entonces es porque es un SL
+        if open_position == 'BE-Exit Short' and (close_price >= sl_price or close_price > price_for_be):
+            return {'message': 'Venta cerrada en SL'}
+
         # Set breakeven to this position
         today_signal.set_be = True
         db.commit()
