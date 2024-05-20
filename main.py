@@ -10,7 +10,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from models import (
     TradingviewAlertSignal, Status, UserAccess, UserAccessAccount,
-    TradingviewAlertGoldLondonSignal, NewsEvents)
+    TradingviewAlertGoldLondonSignal, NewsEvents,
+    LondonNonOperationalDays)
 from database import SessionLocal
 from datetime import datetime, date, timedelta
 
@@ -43,6 +44,9 @@ class Trades(BaseModel):
     sl_price: Optional[float] = None
     tp_pips: Optional[float] = None
     tp_price: Optional[float] = None
+    be_trigger: Optional[float] = None
+    trailing_trigger: Optional[float] = None
+    trailing_distance: Optional[float] = None
 
 
 class TradingviewAlertRequest(BaseModel):
@@ -157,6 +161,9 @@ async def create_tradingview_alert(alert_data: TradingviewAlertRequest, db: Sess
         sl_price = trade.sl_price
         tp_pips = trade.tp_pips
         tp_price = trade.tp_price
+        be_trigger = trade.be_trigger
+        trailing_trigger = trade.trailing_trigger
+        trailing_distance = trade.trailing_distance
 
         # First validate either sl_pips or sl_price is passed
         if (not sl_pips and not sl_price):
@@ -199,6 +206,9 @@ async def create_tradingview_alert(alert_data: TradingviewAlertRequest, db: Sess
             alert.sl_price = sl_price or -1
             alert.tp_pips = tp_pips or -1
             alert.tp_price = tp_price or -1
+            alert.be_trigger = be_trigger or -1
+            alert.trailing_trigger = trailing_trigger or -1
+            alert.trailing_distance = trailing_distance or -1
             alert.amount_to_risk = amount_to_risk
             alert.alert_taken = False
             db.commit()
@@ -214,6 +224,9 @@ async def create_tradingview_alert(alert_data: TradingviewAlertRequest, db: Sess
                 sl_price=sl_price or -1,
                 tp_pips=tp_pips or -1,
                 tp_price=tp_price or -1,
+                be_trigger=be_trigger or -1,
+                trailing_trigger=trailing_trigger or -1,
+                trailing_distance=trailing_distance or -1,
                 amount_to_risk=amount_to_risk,
                 created_at=current_datetime,
                 updated_at=current_datetime
@@ -235,6 +248,16 @@ async def create_tradingview_alert_gold_london(
     timestamp = alert_data.timestamp
 
     today = date.today()
+
+    # First validate if a non operational day
+    non_operational_day = db.query(LondonNonOperationalDays).filter(
+        LondonNonOperationalDays.date == today).first()
+
+    if non_operational_day:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Hoy es un Día NO Operativo"
+        )
 
     today_signal = db.query(TradingviewAlertGoldLondonSignal).filter(
         func.date(TradingviewAlertGoldLondonSignal.created_at) == today

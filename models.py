@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Boolean, Float
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Boolean, Float, Date
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
@@ -66,6 +66,9 @@ class TradingviewAlertSignal(Base):
     sl_price = Column(Float, nullable=True)
     tp_pips = Column(Float, nullable=True)
     tp_price = Column(Float, nullable=True)
+    be_trigger = Column(Float, nullable=True)
+    trailing_trigger = Column(Float, nullable=True)
+    trailing_distance = Column(Float, nullable=True)
     amount_to_risk = Column(Float)
     alert_taken = Column(Boolean, default=False)
 
@@ -99,3 +102,9 @@ class NewsEvents(Base):
     impact = Column(String(10))
     forecast = Column(String(50))
     previous = Column(String(50))
+
+
+class LondonNonOperationalDays(Base):
+    __tablename__ = 'tradingview_alert_londonnonoperationaldays'
+    id = Column(Integer, primary_key=True, index=True)
+    date = Column(Date, unique=True, index=True)
