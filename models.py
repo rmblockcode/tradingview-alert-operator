@@ -66,9 +66,9 @@ class TradingviewAlertSignal(Base):
     sl_price = Column(Float, nullable=True)
     tp_pips = Column(Float, nullable=True)
     tp_price = Column(Float, nullable=True)
-    be_trigger = Column(Float, nullable=True)
-    trailing_trigger = Column(Float, nullable=True)
-    trailing_distance = Column(Float, nullable=True)
+    be_trigger_price = Column(Float, nullable=True)
+    trailing_trigger_price = Column(Float, nullable=True)
+    trailing_distance_pips = Column(Float, nullable=True)
     amount_to_risk = Column(Float)
     alert_taken = Column(Boolean, default=False)
 
