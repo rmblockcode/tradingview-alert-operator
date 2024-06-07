@@ -13,7 +13,7 @@ from models import (
     TradingviewAlertGoldLondonSignal, NewsEvents,
     LondonNonOperationalDays)
 from routers.v2 import tradingview_alert
-from database import SessionLocal
+from database import SessionLocal, get_db
 from datetime import datetime, date, timedelta
 
 
@@ -24,13 +24,6 @@ app.include_router(tradingview_alert.router)
 cache = TTLCache(maxsize=1000, ttl=600) # 5horas
 KEY_CACHE_LONDON = 'london-trade'
 KEY_CACHE_TODAY_NEWS = 'today-news'
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 class SignalType(str, Enum):
@@ -50,6 +43,7 @@ class Trades(BaseModel):
     be_trigger_price: Optional[float] = None
     trailing_trigger_price: Optional[float] = None
     trailing_distance_pips: Optional[float] = None
+    trailing_step: Optional[float] = None
 
 
 class TradingviewAlertRequest(BaseModel):
@@ -166,7 +160,8 @@ async def create_tradingview_alert(alert_data: TradingviewAlertRequest, db: Sess
         tp_price = trade.tp_price
         be_trigger_price = trade.be_trigger_price
         trailing_trigger_price = trade.trailing_trigger_price
-        trailing_distance_price = trade.trailing_distance_pips
+        trailing_distance_pips = trade.trailing_distance_pips
+        trailing_step = trade.trailing_step
 
         # First validate either sl_pips or sl_price is passed
         if (not sl_pips and not sl_price):
@@ -211,7 +206,8 @@ async def create_tradingview_alert(alert_data: TradingviewAlertRequest, db: Sess
             alert.tp_price = tp_price or -1
             alert.be_trigger_price = be_trigger_price or -1
             alert.trailing_trigger_price = trailing_trigger_price or -1
-            alert.trailing_distance_pips = trailing_distance_price or -1
+            alert.trailing_distance_pips = trailing_distance_pips or -1
+            alert.trailing_step = trailing_step or -1
             alert.amount_to_risk = amount_to_risk
             alert.alert_taken = False
             db.commit()
@@ -229,7 +225,8 @@ async def create_tradingview_alert(alert_data: TradingviewAlertRequest, db: Sess
                 tp_price=tp_price or -1,
                 be_trigger_price=be_trigger_price or -1,
                 trailing_trigger_price=trailing_trigger_price or -1,
-                trailing_distance_price=trailing_distance_price or -1,
+                trailing_distance_pips=trailing_distance_pips or -1,
+                trailing_step = trailing_step or -1,
                 amount_to_risk=amount_to_risk,
                 created_at=current_datetime,
                 updated_at=current_datetime
