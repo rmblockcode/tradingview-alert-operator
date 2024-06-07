@@ -131,7 +131,11 @@ async def get_tradingview_alert(user_code: str, account_number:str, db: Session 
         'tp_pips': alert.tp_pips,
         'tp_price': alert.tp_price,
         'symbol': alert.symbol,
-        'amount_to_risk': alert.amount_to_risk
+        'amount_to_risk': alert.amount_to_risk,
+        'be_trigger_price': alert.be_trigger_price,
+        'tailing_trigger_price': alert.trailing_trigger_price,
+        'trailing_distance_pips': alert.trailing_distance_pips,
+        'trailing_step': alert.trailing_step
     }
 
 
