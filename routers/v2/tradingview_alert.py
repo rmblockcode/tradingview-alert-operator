@@ -34,7 +34,7 @@ async def create_tradingview_alert(data: str = Body(...), db: Session = Depends(
             raise HTTPException(status_code=400, detail="Formato de notificación inválido")
     
         user_code = parts[0].strip()
-        account_number = int(parts[1]).strip()
+        account_number = int(parts[1])
         signal_type = parts[2].strip()
         symbol = parts[3]
 
@@ -97,8 +97,8 @@ async def create_tradingview_alert(data: str = Body(...), db: Session = Depends(
             if field:
                 try:
                     value = float(field)
-                    if value < 0:
-                        raise ValueError('No se permiten valores negativos')
+                    # if value < 0:
+                    #     raise ValueError('No se permiten valores negativos')
                 except ValueError as e:
                     raise HTTPException(
                         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
