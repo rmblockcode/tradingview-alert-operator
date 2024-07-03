@@ -144,6 +144,7 @@ async def create_tradingview_alert(data: str = Body(...), db: Session = Depends(
                 trailing_distance_pips=trailing_distance_pips or -1,
                 trailing_step = trailing_step or -1,
                 amount_to_risk=amount_to_risk,
+                alert_taken = False,
                 created_at=current_datetime,
                 updated_at=current_datetime
             )
