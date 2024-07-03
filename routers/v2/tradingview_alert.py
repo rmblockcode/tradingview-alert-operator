@@ -108,7 +108,8 @@ async def create_tradingview_alert(data: str = Body(...), db: Session = Depends(
         alert = db.query(TradingviewAlertSignal).filter(
             TradingviewAlertSignal.user_access.has(user_code=user_code),
             TradingviewAlertSignal.account_number == account_number,
-            TradingviewAlertSignal.symbol == symbol
+            TradingviewAlertSignal.symbol == symbol,
+            TradingviewAlertSignal.signal_type == signal_type
         ).first()
 
         if alert:
