@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from models import (
     TradingviewAlertSignal, Status, UserAccess, UserAccessAccount,
     TradingviewAlertGoldLondonSignal, NewsEvents,
-    LondonNonOperationalDays)
+    LondonNonOperationalDays, BotsAvailable)
 from routers.v2 import tradingview_alert
 from database import SessionLocal, get_db
 from datetime import datetime, date, timedelta
@@ -75,14 +75,59 @@ async def health_checker():
     return {"message": "Server Running..."}
 
 
+# @app.get("/access-validation/{user_code}/{account_number}/{bot_access}/{is_real}/")
+# async def user_access_validation(user_code: str, account_number: str, bot_access: str, is_real: str):
+#     if bot_access not in ['xauusd_bot_ny_enabled', 'xauusd_bot_london_enabled', 'tradingview_alert_bot_enabled']:
+#         return {"result": False}
+
+#     is_real_account = True if is_real == "Real" else False
+
+#     db = SessionLocal()
+#     try:
+#         user_access_account = db.query(UserAccessAccount).join(UserAccess).filter(
+#             UserAccess.user_code == user_code,
+#             UserAccessAccount.account_number == account_number,
+#             UserAccessAccount.is_real == is_real_account,
+#             UserAccess.status.has(status="active"),
+#             UserAccessAccount.status.has(status="active")
+#         ).one_or_none()
+
+#         if not user_access_account:
+#             return {"result": False}
+
+#         if bot_access == 'xauusd_bot_ny_enabled' and not user_access_account.user_access.xauusd_bot_ny_enabled:
+#             return {"result": False}
+        
+#         if bot_access == 'xauusd_bot_london_enabled' and not user_access_account.user_access.xauusd_bot_london_enabled:
+#             return {"result": False}
+        
+#         if bot_access == 'tradingview_alert_bot_enabled' and not user_access_account.user_access.tradingview_alert_bot_enabled:
+#             return {"result": False}
+
+#         # Validating with bots enabled column
+        
+        
+#         return {"result": True}
+
+#     finally:
+#         db.close()
+
+
 @app.get("/access-validation/{user_code}/{account_number}/{bot_access}/{is_real}/")
 async def user_access_validation(user_code: str, account_number: str, bot_access: str, is_real: str):
-    if bot_access not in ['xauusd_bot_ny_enabled', 'xauusd_bot_london_enabled', 'tradingview_alert_bot_enabled']:
+    
+    db = SessionLocal()
+
+    # Validating bot access code
+    bot = db.query(BotsAvailable).filter(
+        BotsAvailable.bot_unique_description==bot_access).first()
+    
+    if not bot:
+        print(f'Código de bot {bot_access} no existe en nuestra plataforma.')
         return {"result": False}
 
     is_real_account = True if is_real == "Real" else False
 
-    db = SessionLocal()
     try:
         user_access_account = db.query(UserAccessAccount).join(UserAccess).filter(
             UserAccess.user_code == user_code,
@@ -95,16 +140,14 @@ async def user_access_validation(user_code: str, account_number: str, bot_access
         if not user_access_account:
             return {"result": False}
 
-        if bot_access == 'xauusd_bot_ny_enabled' and not user_access_account.user_access.xauusd_bot_ny_enabled:
-            return {"result": False}
+        # Validating with bots enabled column
+        bot_enabled = db.query(BotsAvailable).join(UserAccess.bots_enabled).filter(
+            UserAccess.user_access_id == user_access_account.user_access.user_access_id,
+            BotsAvailable.bot_unique_description == bot_access).first()
+
+        has_access = False if not bot_enabled else True
         
-        if bot_access == 'xauusd_bot_london_enabled' and not user_access_account.user_access.xauusd_bot_london_enabled:
-            return {"result": False}
-        
-        if bot_access == 'tradingview_alert_bot_enabled' and not user_access_account.user_access.tradingview_alert_bot_enabled:
-            return {"result": False}
-        
-        return {"result": True}
+        return {"result": has_access}
 
     finally:
         db.close()
@@ -363,7 +406,7 @@ async def set_be_tradingview_alert_gold_london(
             return {'message': 'Compra cerrada en SL'}
 
         # Vemos si esta cerrando una venta en SL
-        # Para el caso de ventas, si el precio de la alerta es maor o igual al precio de sl
+        # Para el caso de ventas, si el precio de la alerta es mayor o igual al precio de sl
         # o si el precio es mayor al precio de BE entonces es porque es un SL
         if open_position == 'BE-Exit Short' and (close_price >= sl_price or close_price > price_for_be):
             return {'message': 'Venta cerrada en SL'}

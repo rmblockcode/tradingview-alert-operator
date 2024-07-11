@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Boolean, Float, Date
+from sqlalchemy import Table, Column, Integer, String, ForeignKey, DateTime, Boolean, Float, Date
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
@@ -16,9 +16,32 @@ class Status(Base):
         return self.status
 
 
+association_table = Table('access_management_useraccess_bots_enabled', Base.metadata,
+    Column('useraccess_id', Integer, ForeignKey('access_management_useraccess.user_access_id')),
+    Column('botsavailable_id', Integer, ForeignKey('access_management_botsavailable.id'))
+)
+
+class BotsAvailable(Base):
+    __tablename__ = 'access_management_botsavailable'
+
+    id = Column(Integer, primary_key=True)
+    bot_name = Column(String(100), nullable=False)
+    bot_unique_description = Column(String(100), nullable=False)
+    active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    users = relationship("UserAccess", secondary=association_table, back_populates="bots_enabled")
+
+    def __repr__(self):
+        return f"<BotsAvailable(bot_name={self.bot_name})>"
+    
+
 class UserAccess(Base):
     __tablename__ = 'access_management_useraccess'
 
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     user_access_id = Column(Integer, primary_key=True)
     user_fullname = Column(String(100), nullable=False)
     user_code = Column(String(25), unique=True, nullable=False)
@@ -30,8 +53,8 @@ class UserAccess(Base):
     xauusd_bot_ny_enabled = Column(Boolean, default=False)
     xauusd_bot_london_enabled = Column(Boolean, default=False)
     tradingview_alert_bot_enabled = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    
+    bots_enabled = relationship("BotsAvailable", secondary=association_table, back_populates="users")
 
     def __repr__(self):
         return f"<UserAccess(user_fullname={self.user_fullname}, user_code={self.user_code})>"
